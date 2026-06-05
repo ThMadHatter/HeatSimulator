@@ -1,15 +1,18 @@
 import { Component } from '../store/useStore';
-import { computeGaussianHeatmap, applyColorMap, HeatmapResult } from './gaussian';
+import { Point, HeatmapResult } from './types';
+import { computeThermalField } from './temperature';
+import { applyColorMap } from './colorMap';
 
-export type { HeatmapResult };
+export * from './types';
+export { applyColorMap };
 
 export const computeHeatmap = (
     components: Component[],
     widthMm: number,
     heightMm: number,
+    boundary: Point[],
+    ambientTemp: number,
     resolution: number = 150
 ): HeatmapResult => {
-    return computeGaussianHeatmap(components, widthMm, heightMm, resolution);
+    return computeThermalField(components, widthMm, heightMm, boundary, ambientTemp, resolution);
 };
-
-export { applyColorMap };

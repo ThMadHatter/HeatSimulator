@@ -1,10 +1,10 @@
 import React from 'react';
 import { useStore } from '../store/useStore';
-import { Upload, Ruler, Plus, MousePointer2 } from 'lucide-react';
+import { Upload, Ruler, Plus, MousePointer2, Square, Trash2 } from 'lucide-react';
 import { SelectImage, LoadImage } from '../../wailsjs/go/main/App';
 
 const Toolbar: React.FC = () => {
-  const { mode, setMode, setImage } = useStore();
+  const { mode, setMode, setImage, clearBoundary } = useStore();
 
   const handleLoadImage = async () => {
     try {
@@ -25,7 +25,7 @@ const Toolbar: React.FC = () => {
   };
 
   return (
-    <div className="flex flex-col gap-4 p-4 bg-gray-800 text-white w-16 items-center shadow-lg h-full">
+    <div className="flex flex-col gap-4 p-4 bg-gray-800 text-white w-16 items-center shadow-lg h-full z-20">
       <button
         onClick={handleLoadImage}
         className="p-2 rounded hover:bg-gray-700 transition-colors"
@@ -53,12 +53,30 @@ const Toolbar: React.FC = () => {
       </button>
 
       <button
+        onClick={() => setMode('drawBoundary')}
+        className={`p-2 rounded transition-colors ${mode === 'drawBoundary' ? 'bg-blue-600' : 'hover:bg-gray-700'}`}
+        title="Draw PCB Boundary"
+      >
+        <Square size={24} />
+      </button>
+
+      <button
         onClick={() => setMode('addComponent')}
         className={`p-2 rounded transition-colors ${mode === 'addComponent' ? 'bg-blue-600' : 'hover:bg-gray-700'}`}
         title="Add Component"
       >
         <Plus size={24} />
       </button>
+
+      <div className="mt-auto">
+        <button
+            onClick={clearBoundary}
+            className="p-2 rounded hover:bg-red-900 transition-colors text-red-400"
+            title="Clear Boundary"
+        >
+            <Trash2 size={24} />
+        </button>
+      </div>
     </div>
   );
 };

@@ -4,12 +4,11 @@ import { useStore } from '../store/useStore';
 const Controls: React.FC = () => {
   const {
     heatmapOpacity, setHeatmapOpacity,
-    maxTempScale, setMaxTempScale,
     calibration, setCalibrationDistance, resetCalibration
   } = useStore();
 
   return (
-    <div className="h-16 bg-gray-900 text-white flex items-center px-6 gap-8 shadow-inner">
+    <div className="h-16 bg-gray-900 text-white flex items-center px-6 gap-8 shadow-inner z-20">
       <div className="flex items-center gap-3">
         <label className="text-sm font-medium">Heatmap Opacity</label>
         <input
@@ -22,20 +21,6 @@ const Controls: React.FC = () => {
           className="w-32"
         />
         <span className="text-xs w-8">{(heatmapOpacity * 100).toFixed(0)}%</span>
-      </div>
-
-      <div className="flex items-center gap-3">
-        <label className="text-sm font-medium">Max Temp (W equivalent)</label>
-        <input
-          type="range"
-          min="1"
-          max="100"
-          step="1"
-          value={maxTempScale}
-          onChange={(e) => setMaxTempScale(parseInt(e.target.value))}
-          className="w-32"
-        />
-        <span className="text-xs w-8">{maxTempScale}</span>
       </div>
 
       {calibration.point1 && calibration.point2 && (

@@ -2,6 +2,7 @@ import React, { useMemo } from 'react';
 import { Image as KonvaImage } from 'react-konva';
 import { useStore } from '../store/useStore';
 import { computeHeatmap, applyColorMap } from '../thermal';
+import Legend from './Legend';
 
 interface HeatmapOverlayProps {
   width: number;
@@ -11,26 +12,41 @@ interface HeatmapOverlayProps {
 }
 
 const HeatmapOverlay: React.FC<HeatmapOverlayProps> = ({ width, height, widthMm, heightMm }) => {
-  const { components, maxTempScale, heatmapOpacity } = useStore();
+  const {
+    components, heatmapOpacity, boundary,
+    ambientTemperature, globalMaxTemperature
+  } = useStore();
 
-  const heatmapImage = useMemo(() => {
-    if (width <= 0 || height <= 0 || components.length === 0) return null;
+  const { img, minTemp, maxTemp } = useMemo(() => {
+    if (width <= 0 || height <= 0 || components.length === 0) {
+        return { img: null, minTemp: ambientTemperature, maxTemp: ambientTemperature + 10 };
+    }
 
     const resolution = 150;
-    const result = computeHeatmap(components, widthMm, heightMm, resolution);
+    const result = computeHeatmap(
+        components,
+        widthMm,
+        heightMm,
+        boundary,
+        ambientTemperature,
+        resolution
+    );
+
+    const displayMaxT = globalMaxTemperature !== null ? globalMaxTemperature : result.maxTemp;
+    const displayMinT = result.minTemp;
 
     const canvas = document.createElement('canvas');
     canvas.width = resolution;
     canvas.height = resolution;
     const ctx = canvas.getContext('2d');
 
-    if (!ctx) return null;
+    if (!ctx) return { img: null, minTemp: displayMinT, maxTemp: displayMaxT };
 
     const imageData = ctx.createImageData(resolution, resolution);
 
     for (let i = 0; i < result.data.length; i++) {
       const temp = result.data[i];
-      const [r, g, b] = applyColorMap(temp, maxTempScale);
+      const [r, g, b] = applyColorMap(temp, displayMinT, displayMaxT);
 
       imageData.data[i * 4] = r;
       imageData.data[i * 4 + 1] = g;
@@ -40,21 +56,24 @@ const HeatmapOverlay: React.FC<HeatmapOverlayProps> = ({ width, height, widthMm,
 
     ctx.putImageData(imageData, 0, 0);
 
-    const img = new Image();
-    img.src = canvas.toDataURL();
-    return img;
-  }, [components, maxTempScale, widthMm, heightMm, width, height]);
+    const image = new Image();
+    image.src = canvas.toDataURL();
+    return { img: image, minTemp: displayMinT, maxTemp: displayMaxT };
+  }, [components, widthMm, heightMm, boundary, ambientTemperature, globalMaxTemperature, width, height]);
 
-  if (!heatmapImage) return null;
+  if (!img) return null;
 
   return (
-    <KonvaImage
-      image={heatmapImage}
-      width={width}
-      height={height}
-      opacity={heatmapOpacity}
-      listening={false}
-    />
+    <>
+        <KonvaImage
+            image={img}
+            width={width}
+            height={height}
+            opacity={heatmapOpacity}
+            listening={false}
+        />
+        <Legend minTemp={minTemp} maxTemp={maxTemp} />
+    </>
   );
 };
 

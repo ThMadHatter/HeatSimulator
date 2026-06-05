@@ -1,15 +1,18 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { Stage, Layer, Image as KonvaImage, Circle, Line, Text, Group } from 'react-konva';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
+import { Stage, Layer, Image as KonvaImage, Circle, Line, Text, Group, Rect } from 'react-konva';
 import { useStore, Component } from '../store/useStore';
 import HeatmapOverlay from './HeatmapOverlay';
 import DebugPanel from './DebugPanel';
 import { KonvaEventObject } from 'konva/lib/Node';
+import { computeHeatmap } from '../thermal';
+import Konva from 'konva';
 
 const CanvasView: React.FC = () => {
   const {
     image, imageDimensions, mode, components, addComponent,
     updateComponent, selectComponent, selectedComponentId,
-    calibration, setCalibrationPoint
+    calibration, setCalibrationPoint,
+    boundary, addBoundaryPoint, ambientTemperature
   } = useStore();
 
   const [stage, setStage] = useState({
@@ -18,8 +21,21 @@ const CanvasView: React.FC = () => {
     y: 0,
   });
 
+  const [mousePos, setMousePos] = useState({ x: 0, y: 0, mmX: 0, mmY: 0, temp: 0 });
   const [bgImage, setBgImage] = useState<HTMLImageElement | null>(null);
   const stageRef = useRef<any>(null);
+  const [opacity, setOpacity] = useState(1);
+
+  // Animation for flashing red
+  useEffect(() => {
+    const anim = new Konva.Animation((frame) => {
+        if (!frame) return;
+        const o = (Math.sin(frame.time / 200) + 1) / 2;
+        setOpacity(0.4 + o * 0.6);
+    });
+    anim.start();
+    return () => { anim.stop(); };
+  }, []);
 
   useEffect(() => {
     if (image) {
@@ -30,6 +46,43 @@ const CanvasView: React.FC = () => {
       setBgImage(null);
     }
   }, [image]);
+
+  const heatmapResult = useMemo(() => {
+    if (!imageDimensions || !calibration.mmPerPixel || components.length === 0) return null;
+    return computeHeatmap(
+        components,
+        imageDimensions.width * calibration.mmPerPixel,
+        imageDimensions.height * calibration.mmPerPixel,
+        boundary,
+        ambientTemperature,
+        150
+    );
+  }, [components, imageDimensions, calibration, boundary, ambientTemperature]);
+
+  const handleMouseMove = (e: any) => {
+    const stageObj = e.target.getStage();
+    const pointer = stageObj.getRelativePointerPosition();
+    if (!pointer) return;
+
+    let temp = ambientTemperature;
+    let mmX = 0;
+    let mmY = 0;
+
+    if (calibration.mmPerPixel) {
+        mmX = pointer.x * calibration.mmPerPixel;
+        mmY = pointer.y * calibration.mmPerPixel;
+
+        if (heatmapResult && imageDimensions) {
+            const gridX = Math.floor((mmX / (imageDimensions.width * calibration.mmPerPixel)) * 150);
+            const gridY = Math.floor((mmY / (imageDimensions.height * calibration.mmPerPixel)) * 150);
+            if (gridX >= 0 && gridX < 150 && gridY >= 0 && gridY < 150) {
+                temp = heatmapResult.data[gridY * 150 + gridX];
+            }
+        }
+    }
+
+    setMousePos({ x: pointer.x, y: pointer.y, mmX, mmY, temp });
+  };
 
   const handleWheel = (e: KonvaEventObject<WheelEvent>) => {
     e.evt.preventDefault();
@@ -56,12 +109,23 @@ const CanvasView: React.FC = () => {
   };
 
   const handleStageClick = (e: KonvaEventObject<MouseEvent>) => {
+    const stageObj = e.target.getStage();
+    if (!stageObj) return;
+    const pos = stageObj.getRelativePointerPosition();
+    if (!pos) return;
+
     if (mode === 'calibrate') {
-      const stageObj = e.target.getStage();
-      if (!stageObj) return;
-      const pos = stageObj.getRelativePointerPosition();
-      if (pos) setCalibrationPoint({ x: pos.x, y: pos.y });
+      setCalibrationPoint({ x: pos.x, y: pos.y });
       return;
+    }
+
+    if (mode === 'drawBoundary') {
+        if (!calibration.mmPerPixel) {
+            alert("Calibrate first!");
+            return;
+        }
+        addBoundaryPoint({ x: pos.x * calibration.mmPerPixel, y: pos.y * calibration.mmPerPixel });
+        return;
     }
 
     if (mode === 'addComponent') {
@@ -69,21 +133,20 @@ const CanvasView: React.FC = () => {
         alert("Please calibrate the scale first!");
         return;
       }
-      const stageObj = e.target.getStage();
-      if (!stageObj) return;
-      const pos = stageObj.getRelativePointerPosition();
-      if (pos) {
-        const newComp: Component = {
-          id: Math.random().toString(36).substr(2, 9),
-          name: `U${components.length + 1}`,
-          x: pos.x * calibration.mmPerPixel,
-          y: pos.y * calibration.mmPerPixel,
-          power: 1.0,
-          spread: 5.0,
-        };
-        addComponent(newComp);
-        selectComponent(newComp.id);
-      }
+      const newComp: Component = {
+        id: Math.random().toString(36).substr(2, 9),
+        name: `U${components.length + 1}`,
+        x: pos.x * calibration.mmPerPixel,
+        y: pos.y * calibration.mmPerPixel,
+        width: 10,
+        height: 10,
+        power: 1.0,
+        spread: 5.0,
+        thetaJA: 40,
+        maxTemperature: 125,
+      };
+      addComponent(newComp);
+      selectComponent(newComp.id);
       return;
     }
 
@@ -103,10 +166,12 @@ const CanvasView: React.FC = () => {
     );
   }
 
+  const boundaryPointsPx = boundary.flatMap(p => [mmToPx(p.x), mmToPx(p.y)]);
+
   return (
-    <div className="flex-1 bg-gray-300 relative overflow-hidden">
+    <div className="flex-1 bg-gray-300 relative overflow-hidden cursor-crosshair">
       <Stage
-        width={window.innerWidth - 64 - 256} // Adjust based on sidebar widths
+        width={window.innerWidth - 64 - 256}
         height={window.innerHeight - 64}
         scaleX={stage.scale}
         scaleY={stage.scale}
@@ -114,6 +179,7 @@ const CanvasView: React.FC = () => {
         y={stage.y}
         onWheel={handleWheel}
         onClick={handleStageClick}
+        onMouseMove={handleMouseMove}
         draggable={mode === 'select' && !selectedComponentId}
         ref={stageRef}
       >
@@ -127,6 +193,17 @@ const CanvasView: React.FC = () => {
               widthMm={imageDimensions.width * calibration.mmPerPixel}
               heightMm={imageDimensions.height * calibration.mmPerPixel}
             />
+          )}
+
+          {/* Boundary */}
+          {boundary.length > 0 && (
+              <Line
+                points={boundaryPointsPx}
+                stroke="#10b981"
+                strokeWidth={2 / stage.scale}
+                closed={true}
+                fill="#10b98122"
+              />
           )}
 
           {/* Calibration Overlay */}
@@ -148,7 +225,17 @@ const CanvasView: React.FC = () => {
           {components.map((comp) => {
             const pxX = mmToPx(comp.x);
             const pxY = mmToPx(comp.y);
+            const pxW = mmToPx(comp.width);
+            const pxH = mmToPx(comp.height);
             const isSelected = comp.id === selectedComponentId;
+
+            const junction = heatmapResult?.junctions.find(j => j.compId === comp.id);
+            let statusColor = "#10b981"; // green
+            if (junction) {
+                if (junction.isOverLimit) statusColor = "#ef4444"; // red
+                else if (junction.ratingPercent > 90) statusColor = "#ef4444"; // red
+                else if (junction.ratingPercent > 70) statusColor = "#f59e0b"; // yellow/orange
+            }
 
             return (
               <Group
@@ -170,33 +257,77 @@ const CanvasView: React.FC = () => {
                     selectComponent(comp.id);
                 }}
               >
+                <Rect
+                    x={-pxW/2}
+                    y={-pxH/2}
+                    width={pxW}
+                    height={pxH}
+                    fill="transparent"
+                    stroke={isSelected ? "#3b82f6" : "rgba(255,255,255,0.5)"}
+                    strokeWidth={2 / stage.scale}
+                    dash={isSelected ? [] : [5, 5]}
+                />
                 <Circle
-                  radius={isSelected ? 10 / stage.scale : 8 / stage.scale}
-                  fill={isSelected ? "#3b82f6" : "#ef4444"}
-                  stroke={isSelected ? "yellow" : "white"}
+                  radius={8 / stage.scale}
+                  fill={statusColor}
+                  opacity={junction?.isOverLimit ? opacity : 1}
+                  stroke="white"
                   strokeWidth={2 / stage.scale}
-                  shadowBlur={isSelected ? 10 : 0}
-                  shadowColor="black"
+                  shadowBlur={junction?.isOverLimit ? 10 : 0}
+                  shadowColor="red"
                 />
                 <Text
-                  text={comp.name}
-                  fontSize={14 / stage.scale}
-                  fill={isSelected ? "#3b82f6" : "black"}
-                  fontStyle={isSelected ? "bold" : "normal"}
-                  y={-20 / stage.scale}
+                  text={`${comp.name}\nTj: ${junction?.tj.toFixed(1)}°C\n(${junction?.ratingPercent.toFixed(0)}%)`}
+                  fontSize={10 / stage.scale}
+                  fill="white"
+                  fontStyle="bold"
+                  y={pxH/2 + 5 / stage.scale}
                   align="center"
-                  width={60 / stage.scale}
-                  x={-30 / stage.scale}
+                  width={100 / stage.scale}
+                  x={-50 / stage.scale}
+                  shadowColor="black"
+                  shadowBlur={2}
+                  shadowOffset={{x:1, y:1}}
+                  shadowOpacity={1}
                 />
+                {junction?.isOverLimit && (
+                    <Text
+                        text="⚠️ CRITICAL"
+                        fontSize={10 / stage.scale}
+                        fill="#ef4444"
+                        fontStyle="bold"
+                        y={-pxH/2 - 15 / stage.scale}
+                        align="center"
+                        width={100 / stage.scale}
+                        x={-50 / stage.scale}
+                        opacity={opacity}
+                    />
+                )}
               </Group>
             );
           })}
         </Layer>
       </Stage>
 
+      {/* Tooltip */}
+      {calibration.mmPerPixel && (
+        <div className="absolute bottom-4 right-4 bg-black/80 text-white p-2 rounded text-[10px] font-mono pointer-events-none border border-white/20 backdrop-blur-sm shadow-xl">
+            <div className="text-blue-400 font-bold mb-1">CURSOR INFO</div>
+            X: {mousePos.mmX.toFixed(1)} mm<br/>
+            Y: {mousePos.mmY.toFixed(1)} mm<br/>
+            T: <span className={mousePos.temp > 80 ? "text-red-400" : "text-green-400"}>{mousePos.temp.toFixed(1)} °C</span>
+        </div>
+      )}
+
       {mode === 'calibrate' && !calibration.mmPerPixel && (
         <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-blue-600 text-white px-4 py-2 rounded-full shadow-lg pointer-events-none">
           Click two points on the image to calibrate scale
+        </div>
+      )}
+
+      {mode === 'drawBoundary' && (
+        <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-emerald-600 text-white px-4 py-2 rounded-full shadow-lg pointer-events-none">
+          Click to define PCB boundary points
         </div>
       )}
 

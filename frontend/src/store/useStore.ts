@@ -3,10 +3,15 @@ import { create } from 'zustand';
 export interface Component {
   id: string;
   name: string;
-  x: number; // mm
-  y: number; // mm
+  x: number; // mm (center)
+  y: number; // mm (center)
+  width: number; // mm
+  height: number; // mm
   power: number; // W
   spread: number; // sigma in mm
+  thetaJA?: number; // °C/W
+  thetaJC?: number; // °C/W
+  maxTemperature?: number; // °C
 }
 
 export interface Calibration {
@@ -16,29 +21,43 @@ export interface Calibration {
   mmPerPixel: number | null;
 }
 
-export type InteractionMode = 'select' | 'calibrate' | 'addComponent';
+export type InteractionMode = 'select' | 'calibrate' | 'addComponent' | 'drawBoundary';
 
 interface State {
   image: string | null;
   imageDimensions: { width: number; height: number } | null;
   components: Component[];
   calibration: Calibration;
+  boundary: { x: number; y: number }[]; // in mm
+  ambientTemperature: number; // °C
+  defaultBoardSigma: number; // mm
+  globalMaxTemperature: number | null; // °C
+
   mode: InteractionMode;
   selectedComponentId: string | null;
   heatmapOpacity: number;
-  maxTempScale: number;
 
+  // Actions
   setImage: (image: string | null, width?: number, height?: number) => void;
   setMode: (mode: InteractionMode) => void;
   addComponent: (comp: Component) => void;
   updateComponent: (id: string, updates: Partial<Component>) => void;
   removeComponent: (id: string) => void;
   selectComponent: (id: string | null) => void;
+
   setCalibrationPoint: (point: { x: number; y: number }) => void;
   setCalibrationDistance: (distance: number) => void;
   resetCalibration: () => void;
+
+  setBoundary: (points: { x: number; y: number }[]) => void;
+  addBoundaryPoint: (point: { x: number; y: number }) => void;
+  clearBoundary: () => void;
+
+  setAmbientTemperature: (temp: number) => void;
+  setDefaultBoardSigma: (sigma: number) => void;
+  setGlobalMaxTemperature: (temp: number | null) => void;
+
   setHeatmapOpacity: (opacity: number) => void;
-  setMaxTempScale: (scale: number) => void;
 }
 
 export const useStore = create<State>((set) => ({
@@ -51,15 +70,20 @@ export const useStore = create<State>((set) => ({
     distanceMm: 0,
     mmPerPixel: null,
   },
+  boundary: [],
+  ambientTemperature: 25,
+  defaultBoardSigma: 5,
+  globalMaxTemperature: null,
+
   mode: 'select',
   selectedComponentId: null,
   heatmapOpacity: 0.6,
-  maxTempScale: 50,
 
   setImage: (image, width, height) => set({
     image,
     imageDimensions: width && height ? { width, height } : null,
-    components: [], // Reset on new image
+    components: [],
+    boundary: [],
     calibration: { point1: null, point2: null, distanceMm: 0, mmPerPixel: null }
   }),
   setMode: (mode) => set({ mode }),
@@ -72,6 +96,7 @@ export const useStore = create<State>((set) => ({
     selectedComponentId: state.selectedComponentId === id ? null : state.selectedComponentId,
   })),
   selectComponent: (id) => set({ selectedComponentId: id }),
+
   setCalibrationPoint: (point) => set((state) => {
     if (!state.calibration.point1) {
       return { calibration: { ...state.calibration, point1: point } };
@@ -95,6 +120,14 @@ export const useStore = create<State>((set) => ({
     return { calibration: { ...state.calibration, distanceMm: distance, mmPerPixel } };
   }),
   resetCalibration: () => set({ calibration: { point1: null, point2: null, distanceMm: 0, mmPerPixel: null } }),
+
+  setBoundary: (boundary) => set({ boundary }),
+  addBoundaryPoint: (point) => set((state) => ({ boundary: [...state.boundary, point] })),
+  clearBoundary: () => set({ boundary: [] }),
+
+  setAmbientTemperature: (ambientTemperature) => set({ ambientTemperature }),
+  setDefaultBoardSigma: (defaultBoardSigma) => set({ defaultBoardSigma }),
+  setGlobalMaxTemperature: (globalMaxTemperature) => set({ globalMaxTemperature }),
+
   setHeatmapOpacity: (heatmapOpacity) => set({ heatmapOpacity }),
-  setMaxTempScale: (maxTempScale) => set({ maxTempScale }),
 }));
