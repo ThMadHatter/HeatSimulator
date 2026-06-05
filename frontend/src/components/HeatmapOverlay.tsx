@@ -1,7 +1,7 @@
 import React, { useMemo } from 'react';
 import { Image as KonvaImage } from 'react-konva';
 import { useStore } from '../store/useStore';
-import { computeHeatmap, tempToColor } from '../utils/thermal';
+import { computeHeatmap, applyColorMap } from '../thermal';
 
 interface HeatmapOverlayProps {
   width: number;
@@ -16,8 +16,8 @@ const HeatmapOverlay: React.FC<HeatmapOverlayProps> = ({ width, height, widthMm,
   const heatmapImage = useMemo(() => {
     if (width <= 0 || height <= 0 || components.length === 0) return null;
 
-    const resolution = 150; // Use a bit lower for performance if needed
-    const grid = computeHeatmap(widthMm, heightMm, components, resolution);
+    const resolution = 150;
+    const result = computeHeatmap(components, widthMm, heightMm, resolution);
 
     const canvas = document.createElement('canvas');
     canvas.width = resolution;
@@ -28,17 +28,14 @@ const HeatmapOverlay: React.FC<HeatmapOverlayProps> = ({ width, height, widthMm,
 
     const imageData = ctx.createImageData(resolution, resolution);
 
-    for (let i = 0; i < grid.length; i++) {
-      const point = grid[i];
-      const color = tempToColor(point.temp, maxTempScale);
-      // Extract RGB from color string "rgb(r, g, b)"
-      const matches = color.match(/\d+/g);
-      if (matches) {
-          imageData.data[i * 4] = parseInt(matches[0]);
-          imageData.data[i * 4 + 1] = parseInt(matches[1]);
-          imageData.data[i * 4 + 2] = parseInt(matches[2]);
-          imageData.data[i * 4 + 3] = 255; // Alpha handled by Konva Layer
-      }
+    for (let i = 0; i < result.data.length; i++) {
+      const temp = result.data[i];
+      const [r, g, b] = applyColorMap(temp, maxTempScale);
+
+      imageData.data[i * 4] = r;
+      imageData.data[i * 4 + 1] = g;
+      imageData.data[i * 4 + 2] = b;
+      imageData.data[i * 4 + 3] = 255;
     }
 
     ctx.putImageData(imageData, 0, 0);

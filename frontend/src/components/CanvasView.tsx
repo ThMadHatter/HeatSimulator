@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Stage, Layer, Image as KonvaImage, Circle, Line, Text, Group } from 'react-konva';
 import { useStore, Component } from '../store/useStore';
 import HeatmapOverlay from './HeatmapOverlay';
+import DebugPanel from './DebugPanel';
 import { KonvaEventObject } from 'konva/lib/Node';
 
 const CanvasView: React.FC = () => {
@@ -113,7 +114,7 @@ const CanvasView: React.FC = () => {
         y={stage.y}
         onWheel={handleWheel}
         onClick={handleStageClick}
-        draggable={mode === 'select'}
+        draggable={mode === 'select' && !selectedComponentId}
         ref={stageRef}
       >
         <Layer>
@@ -155,6 +156,7 @@ const CanvasView: React.FC = () => {
                 x={pxX}
                 y={pxY}
                 draggable={mode === 'select'}
+                onDragStart={() => selectComponent(comp.id)}
                 onDragEnd={(e: KonvaEventObject<DragEvent>) => {
                     if (calibration.mmPerPixel) {
                         updateComponent(comp.id, {
@@ -169,19 +171,22 @@ const CanvasView: React.FC = () => {
                 }}
               >
                 <Circle
-                  radius={8 / stage.scale}
+                  radius={isSelected ? 10 / stage.scale : 8 / stage.scale}
                   fill={isSelected ? "#3b82f6" : "#ef4444"}
-                  stroke="white"
+                  stroke={isSelected ? "yellow" : "white"}
                   strokeWidth={2 / stage.scale}
+                  shadowBlur={isSelected ? 10 : 0}
+                  shadowColor="black"
                 />
                 <Text
                   text={comp.name}
                   fontSize={14 / stage.scale}
-                  fill="black"
+                  fill={isSelected ? "#3b82f6" : "black"}
+                  fontStyle={isSelected ? "bold" : "normal"}
                   y={-20 / stage.scale}
                   align="center"
-                  width={40 / stage.scale}
-                  x={-20 / stage.scale}
+                  width={60 / stage.scale}
+                  x={-30 / stage.scale}
                 />
               </Group>
             );
@@ -194,6 +199,8 @@ const CanvasView: React.FC = () => {
           Click two points on the image to calibrate scale
         </div>
       )}
+
+      <DebugPanel />
     </div>
   );
 };
