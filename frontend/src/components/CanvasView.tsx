@@ -1,8 +1,9 @@
-import React, { useState, useRef, useEffect, useMemo } from 'react';
+import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import { Stage, Layer, Image as KonvaImage, Circle, Line, Text, Group, Rect } from 'react-konva';
 import { useStore, Component } from '../store/useStore';
 import HeatmapOverlay from './HeatmapOverlay';
 import DebugPanel from './DebugPanel';
+import Legend from './Legend';
 import { KonvaEventObject } from 'konva/lib/Node';
 import { computeHeatmap } from '../thermal';
 import Konva from 'konva';
@@ -20,6 +21,11 @@ const CanvasView: React.FC = () => {
     x: 0,
     y: 0,
   });
+
+  const [heatmapRange, setHeatmapRange] = useState({ min: 25, max: 35 });
+  const handleHeatmapResult = useCallback((min: number, max: number) => {
+    setHeatmapRange({ min, max });
+  }, []);
 
   const [mousePos, setMousePos] = useState({ x: 0, y: 0, mmX: 0, mmY: 0, temp: 0 });
   const [bgImage, setBgImage] = useState<HTMLImageElement | null>(null);
@@ -156,6 +162,16 @@ const CanvasView: React.FC = () => {
     }
   };
 
+  const handleDragEnd = (e: KonvaEventObject<DragEvent>) => {
+    if (e.target === stageRef.current) {
+        setStage({
+            ...stage,
+            x: e.target.x(),
+            y: e.target.y()
+        });
+    }
+  };
+
   const mmToPx = (mm: number) => calibration.mmPerPixel ? mm / calibration.mmPerPixel : mm;
 
   if (!image) {
@@ -180,6 +196,7 @@ const CanvasView: React.FC = () => {
         onWheel={handleWheel}
         onClick={handleStageClick}
         onMouseMove={handleMouseMove}
+        onDragEnd={handleDragEnd}
         draggable={mode === 'select' && !selectedComponentId}
         ref={stageRef}
       >
@@ -192,6 +209,7 @@ const CanvasView: React.FC = () => {
               height={imageDimensions.height}
               widthMm={imageDimensions.width * calibration.mmPerPixel}
               heightMm={imageDimensions.height * calibration.mmPerPixel}
+              onResult={handleHeatmapResult}
             />
           )}
 
@@ -309,7 +327,9 @@ const CanvasView: React.FC = () => {
         </Layer>
       </Stage>
 
-      {/* Tooltip */}
+      {/* DOM Overlays */}
+      <Legend minTemp={heatmapRange.min} maxTemp={heatmapRange.max} />
+
       {calibration.mmPerPixel && (
         <div className="absolute bottom-4 right-4 bg-black/80 text-white p-2 rounded text-[10px] font-mono pointer-events-none border border-white/20 backdrop-blur-sm shadow-xl">
             <div className="text-blue-400 font-bold mb-1">CURSOR INFO</div>

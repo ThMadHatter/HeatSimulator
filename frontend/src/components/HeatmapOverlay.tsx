@@ -2,16 +2,16 @@ import React, { useMemo } from 'react';
 import { Image as KonvaImage } from 'react-konva';
 import { useStore } from '../store/useStore';
 import { computeHeatmap, applyColorMap } from '../thermal';
-import Legend from './Legend';
 
 interface HeatmapOverlayProps {
   width: number;
   height: number;
   widthMm: number;
   heightMm: number;
+  onResult: (minT: number, maxT: number) => void;
 }
 
-const HeatmapOverlay: React.FC<HeatmapOverlayProps> = ({ width, height, widthMm, heightMm }) => {
+const HeatmapOverlay: React.FC<HeatmapOverlayProps> = ({ width, height, widthMm, heightMm, onResult }) => {
   const {
     components, heatmapOpacity, boundary,
     ambientTemperature, globalMaxTemperature
@@ -61,19 +61,20 @@ const HeatmapOverlay: React.FC<HeatmapOverlayProps> = ({ width, height, widthMm,
     return { img: image, minTemp: displayMinT, maxTemp: displayMaxT };
   }, [components, widthMm, heightMm, boundary, ambientTemperature, globalMaxTemperature, width, height]);
 
+  React.useEffect(() => {
+    onResult(minTemp, maxTemp);
+  }, [minTemp, maxTemp, onResult]);
+
   if (!img) return null;
 
   return (
-    <>
-        <KonvaImage
-            image={img}
-            width={width}
-            height={height}
-            opacity={heatmapOpacity}
-            listening={false}
-        />
-        <Legend minTemp={minTemp} maxTemp={maxTemp} />
-    </>
+    <KonvaImage
+        image={img}
+        width={width}
+        height={height}
+        opacity={heatmapOpacity}
+        listening={false}
+    />
   );
 };
 
