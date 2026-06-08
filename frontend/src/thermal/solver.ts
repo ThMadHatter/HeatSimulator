@@ -18,13 +18,22 @@ export function solveSteadyState(
 
     const dx = widthMm / resolution;
     const dy = heightMm / resolution;
-    const k = 0.3; // Thermal conductivity (W/mK) - simplified scale
-    const h = 0.01; // Convection coefficient - simplified scale
+
+    // Physical Constants
+    // k = thermal conductivity (W/mK)
+    // h = convection coeff (W/m²K)
+    // dx is in mm, convert to meters: dxM = dx / 1000
+    const k = 0.5;
+    const h = 10.0;
+    const dxM = dx / 1000;
 
     // 1. Initialize heat sources (Q)
     for (const comp of components) {
         const area = comp.width * comp.height || 1;
-        const powerDensity = comp.power / area;
+        // comp.power is in Watts, area is in mm²
+        // Convert area to m²: areaM2 = area / 1,000,000
+        // powerPerCellVol = power / (areaM2 * thicknessM)
+        const powerPerM2 = comp.power / (area / 1000000);
 
         const startX = Math.max(0, Math.floor(((comp.x - comp.width / 2) / widthMm) * resolution));
         const endX = Math.min(resolution - 1, Math.floor(((comp.x + comp.width / 2) / widthMm) * resolution));
@@ -33,7 +42,7 @@ export function solveSteadyState(
 
         for (let j = startY; j <= endY; j++) {
             for (let i = startX; i <= endX; i++) {
-                Q[j * resolution + i] += powerDensity;
+                Q[j * resolution + i] += powerPerM2;
             }
         }
     }
@@ -52,24 +61,26 @@ export function solveSteadyState(
     }
 
     // 3. Gauss-Seidel Solver
-    const maxIterations = 500;
-    const tolerance = 0.01;
+    const maxIterations = 800;
+    const tolerance = 0.005;
+
+    // Pre-calculate constants for iteration
+    // Equation: k*thickness*(d2T/dx2 + d2T/dy2) + Q_surf - h*(T - Tamb) = 0
+    // simplified: (k*t/dx2) * sum_neighbors + Q_surf + h*Tamb = T * (4*k*t/dx2 + h)
+    const thicknessM = 0.0016;
+    const alpha = (k * thicknessM) / (dxM * dxM);
+    const beta = h;
+    const denom = 4 * alpha + beta;
 
     for (let iter = 0; iter < maxIterations; iter++) {
         let maxDiff = 0;
         T_old.set(T);
 
-        for (let j = 0; j < resolution; j++) {
-            for (let i = 0; i < resolution; i++) {
+        for (let j = 1; j < resolution - 1; j++) {
+            for (let i = 1; i < resolution - 1; i++) {
                 const idx = j * resolution + i;
 
                 if (isInside[idx] === 0) {
-                    T[idx] = ambientTemp;
-                    continue;
-                }
-
-                // Edge treatment (clamped to ambient)
-                if (i === 0 || i === resolution - 1 || j === 0 || j === resolution - 1) {
                     T[idx] = ambientTemp;
                     continue;
                 }
@@ -79,12 +90,9 @@ export function solveSteadyState(
                 const t_up = T[idx - resolution];
                 const t_down = T[idx + resolution];
 
-                // Finite difference equation (steady state)
-                // T[i,j] = (T_neighbors + Q*dx^2/k) / 4
-                const newT = (t_left + t_right + t_up + t_down + (Q[idx] * dx * dx / k)) / 4;
+                const newT = (alpha * (t_left + t_right + t_up + t_down) + Q[idx] + beta * ambientTemp) / denom;
 
-                // Simple convection term (h*(Tamb - T))
-                T[idx] = newT + (h * (ambientTemp - newT));
+                T[idx] = newT;
 
                 const diff = Math.abs(T[idx] - T_old[idx]);
                 if (diff > maxDiff) maxDiff = diff;
