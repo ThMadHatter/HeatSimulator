@@ -1,6 +1,6 @@
 import { Component } from '../store/useStore';
 import { Point, HeatmapResult } from './types';
-import { computeThermalField } from './temperature';
+import { solveSteadyState } from './solver';
 import { applyColorMap } from './colorMap';
 
 export * from './types';
@@ -14,5 +14,5 @@ export const computeHeatmap = (
     ambientTemp: number,
     resolution: number = 150
 ): HeatmapResult => {
-    return computeThermalField(components, widthMm, heightMm, boundary, ambientTemp, resolution);
+    return solveSteadyState(components, widthMm, heightMm, boundary, ambientTemp, resolution);
 };

@@ -8,7 +8,6 @@ export interface Component {
   width: number; // mm
   height: number; // mm
   power: number; // W
-  spread: number; // sigma in mm
   thetaJA?: number; // °C/W
   thetaJC?: number; // °C/W
   maxTemperature?: number; // °C
@@ -30,7 +29,7 @@ interface State {
   calibration: Calibration;
   boundary: { x: number; y: number }[]; // in mm
   ambientTemperature: number; // °C
-  defaultBoardSigma: number; // mm
+  defaultBoardSigma: number; // mm (kept for compatibility if needed elsewhere, but not used in solver)
   globalMaxTemperature: number | null; // °C
 
   mode: InteractionMode;

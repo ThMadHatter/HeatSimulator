@@ -147,7 +147,6 @@ const CanvasView: React.FC = () => {
         width: 10,
         height: 10,
         power: 1.0,
-        spread: 5.0,
         thetaJA: 40,
         maxTemperature: 125,
       };

@@ -6,7 +6,6 @@ const PropertyPanel: React.FC = () => {
   const {
     selectedComponentId, components, updateComponent, removeComponent,
     ambientTemperature, setAmbientTemperature,
-    defaultBoardSigma, setDefaultBoardSigma,
     globalMaxTemperature, setGlobalMaxTemperature
   } = useStore();
 
@@ -26,15 +25,6 @@ const PropertyPanel: React.FC = () => {
                     type="number"
                     value={ambientTemperature}
                     onChange={(e) => setAmbientTemperature(parseFloat(e.target.value) || 0)}
-                    className="mt-1 block w-full rounded border-gray-300 shadow-sm sm:text-xs p-1 border"
-                />
-            </div>
-            <div>
-                <label className="block text-xs font-medium text-gray-700">Default Sigma (mm)</label>
-                <input
-                    type="number"
-                    value={defaultBoardSigma}
-                    onChange={(e) => setDefaultBoardSigma(parseFloat(e.target.value) || 0.1)}
                     className="mt-1 block w-full rounded border-gray-300 shadow-sm sm:text-xs p-1 border"
                 />
             </div>
@@ -126,17 +116,6 @@ const PropertyPanel: React.FC = () => {
                 type="number"
                 value={selectedComp.maxTemperature || 125}
                 onChange={(e) => updateComponent(selectedComp.id, { maxTemperature: parseFloat(e.target.value) || 0 })}
-                className="mt-1 block w-full rounded border-gray-300 shadow-sm sm:text-xs p-1 border"
-                />
-            </div>
-
-            <div className="pt-2">
-                <label className="block text-xs font-medium text-gray-700">Spread (sigma, mm)</label>
-                <input
-                type="number"
-                value={selectedComp.spread}
-                step="0.1"
-                onChange={(e) => updateComponent(selectedComp.id, { spread: parseFloat(e.target.value) || 0.1 })}
                 className="mt-1 block w-full rounded border-gray-300 shadow-sm sm:text-xs p-1 border"
                 />
             </div>
