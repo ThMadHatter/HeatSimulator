@@ -19,20 +19,18 @@ export function solveSteadyState(
     const dx = widthMm / resolution;
     const dy = heightMm / resolution;
 
-    // Physical Constants
-    // k = thermal conductivity (W/mK)
-    // h = convection coeff (W/m²K)
-    // dx is in mm, convert to meters: dxM = dx / 1000
-    const k = 0.5;
-    const h = 10.0;
+    // Physical Constants (Realistic PCB values)
+    // k = thermal conductivity (W/mK). FR4 ~ 0.3, Copper ~ 400.
+    // High-copper PCB effective k can be 20-50 W/mK.
+    const k = 25.0;
+    // h = convection coeff (W/m²K). Natural convection is 5-25.
+    const h = 15.0;
     const dxM = dx / 1000;
 
     // 1. Initialize heat sources (Q)
     for (const comp of components) {
         const area = comp.width * comp.height || 1;
-        // comp.power is in Watts, area is in mm²
-        // Convert area to m²: areaM2 = area / 1,000,000
-        // powerPerCellVol = power / (areaM2 * thicknessM)
+        // powerDensity (W/m²)
         const powerPerM2 = comp.power / (area / 1000000);
 
         const startX = Math.max(0, Math.floor(((comp.x - comp.width / 2) / widthMm) * resolution));
@@ -61,12 +59,10 @@ export function solveSteadyState(
     }
 
     // 3. Gauss-Seidel Solver
-    const maxIterations = 800;
-    const tolerance = 0.005;
+    const maxIterations = 1000;
+    const tolerance = 0.001;
 
-    // Pre-calculate constants for iteration
     // Equation: k*thickness*(d2T/dx2 + d2T/dy2) + Q_surf - h*(T - Tamb) = 0
-    // simplified: (k*t/dx2) * sum_neighbors + Q_surf + h*Tamb = T * (4*k*t/dx2 + h)
     const thicknessM = 0.0016;
     const alpha = (k * thicknessM) / (dxM * dxM);
     const beta = h;
