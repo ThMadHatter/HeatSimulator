@@ -1,10 +1,11 @@
 import React from 'react';
 import { useStore } from '../store/useStore';
-import { Upload, Ruler, Plus, MousePointer2, Square, Trash2 } from 'lucide-react';
+import { Upload, Ruler, Plus, MousePointer2, Square, Trash2, Scan } from 'lucide-react';
 import { SelectImage, LoadImage } from '../../wailsjs/go/main/App';
+import { detectPCBOutline, isOpenCVReady } from '../thermal/edgeDetection';
 
 const Toolbar: React.FC = () => {
-  const { mode, setMode, setImage, clearBoundary } = useStore();
+  const { mode, setMode, setImage, image, calibration, setBoundary, clearBoundary } = useStore();
 
   const handleLoadImage = async () => {
     try {
@@ -22,6 +23,39 @@ const Toolbar: React.FC = () => {
     } catch (err) {
       console.error("Failed to load image:", err);
     }
+  };
+
+  const handleAutoDetect = async () => {
+    if (!isOpenCVReady()) {
+        alert("OpenCV is still loading, please wait...");
+        return;
+    }
+
+    if (!image || !calibration.mmPerPixel) {
+      alert("Please load an image and calibrate first!");
+      return;
+    }
+
+    const img = new Image();
+    img.onload = async () => {
+      try {
+        const points = await detectPCBOutline(img);
+        if (points.length > 0) {
+          const mmPoints = points.map(p => ({
+            x: p.x * (calibration.mmPerPixel as number),
+            y: p.y * (calibration.mmPerPixel as number)
+          }));
+          setBoundary(mmPoints);
+          setMode('drawBoundary');
+        } else {
+          alert("Could not detect a clear PCB outline.");
+        }
+      } catch (err) {
+        console.error("Detection failed:", err);
+        alert("Detection failed. Check console for details.");
+      }
+    };
+    img.src = image;
   };
 
   return (
@@ -42,6 +76,14 @@ const Toolbar: React.FC = () => {
         title="Select/Drag"
       >
         <MousePointer2 size={24} />
+      </button>
+
+      <button
+        onClick={handleAutoDetect}
+        className="p-2 rounded hover:bg-gray-700 transition-colors"
+        title="Auto-detect PCB Boundary"
+      >
+        <Scan size={24} />
       </button>
 
       <button
