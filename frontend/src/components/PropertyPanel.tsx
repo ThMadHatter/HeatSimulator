@@ -1,15 +1,36 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { useStore } from '../store/useStore';
-import { Trash2, Settings } from 'lucide-react';
+import { Trash2, Settings, Info } from 'lucide-react';
+import { computeHeatmap } from '../thermal';
 
 const PropertyPanel: React.FC = () => {
   const {
-    selectedComponentId, components, updateComponent, removeComponent,
+    selectedComponentId, components, zones, updateComponent, removeComponent,
+    imageDimensions, calibration, boundary,
     ambientTemperature, setAmbientTemperature,
     globalMaxTemperature, setGlobalMaxTemperature
   } = useStore();
 
   const selectedComp = components.find((c) => c.id === selectedComponentId);
+
+  const junctionData = useMemo(() => {
+    if (!selectedComp || !imageDimensions || !calibration.mmPerPixel) return null;
+
+    const widthMm = imageDimensions.width * calibration.mmPerPixel;
+    const heightMm = imageDimensions.height * calibration.mmPerPixel;
+
+    const result = computeHeatmap(
+        components,
+        zones,
+        widthMm,
+        heightMm,
+        boundary,
+        ambientTemperature,
+        150
+    );
+
+    return result.junctions.find(j => j.compId === selectedComp.id);
+  }, [selectedComp, components, zones, imageDimensions, calibration, boundary, ambientTemperature]);
 
   return (
     <div className="w-64 bg-gray-100 p-4 border-l border-gray-300 h-full overflow-y-auto">
@@ -131,6 +152,32 @@ const PropertyPanel: React.FC = () => {
                 className="mt-1 block w-full rounded border-gray-300 shadow-sm sm:text-xs p-1 border"
                 />
             </div>
+
+            {junctionData && (
+                <div className="pt-4 border-t border-gray-200 space-y-2">
+                    <h3 className="text-xs font-bold text-blue-600 flex items-center gap-1">
+                        <Info size={14} />
+                        Simulation Results
+                    </h3>
+                    <div className="grid grid-cols-2 gap-x-2 gap-y-1 text-xs">
+                        <span className="text-gray-500">Tpcb:</span>
+                        <span className="text-right font-mono">{junctionData.tpcb.toFixed(1)}°C</span>
+
+                        <span className="text-gray-500">RθPCB:</span>
+                        <span className="text-right font-mono">{junctionData.rthPcb.toFixed(2)} K/W</span>
+
+                        <span className="text-gray-500 font-bold">Tj:</span>
+                        <span className={`text-right font-bold font-mono ${junctionData.isOverLimit ? 'text-red-600' : 'text-green-600'}`}>
+                            {junctionData.tj.toFixed(1)}°C
+                        </span>
+
+                        <span className="text-gray-500 text-[10px]">Rating:</span>
+                        <span className={`text-right text-[10px] font-mono ${junctionData.ratingPercent > 90 ? 'text-red-600' : 'text-gray-700'}`}>
+                            {junctionData.ratingPercent.toFixed(1)}%
+                        </span>
+                    </div>
+                </div>
+            )}
 
             <div className="pt-4 border-t border-gray-200">
                 <p className="text-[10px] text-gray-500 uppercase font-bold">Position</p>

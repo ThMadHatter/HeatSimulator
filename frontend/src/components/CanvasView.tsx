@@ -54,17 +54,19 @@ const CanvasView: React.FC = () => {
     }
   }, [image]);
 
+  const { zones } = useStore();
   const heatmapResult = useMemo(() => {
     if (!imageDimensions || !calibration.mmPerPixel || components.length === 0) return null;
     return computeHeatmap(
         components,
+        zones,
         imageDimensions.width * calibration.mmPerPixel,
         imageDimensions.height * calibration.mmPerPixel,
         boundary,
         ambientTemperature,
         150
     );
-  }, [components, imageDimensions, calibration, boundary, ambientTemperature]);
+  }, [components, zones, imageDimensions, calibration, boundary, ambientTemperature]);
 
   const handleMouseMove = (e: any) => {
     const stageObj = e.target.getStage();

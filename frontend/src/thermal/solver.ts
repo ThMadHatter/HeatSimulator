@@ -1,9 +1,10 @@
 import { Component } from '../store/useStore';
-import { Point, HeatmapResult, JunctionData } from './types';
+import { Point, HeatmapResult, JunctionData, Zone } from './types';
 import { isPointInPolygon } from './utils';
 
 export function solveSteadyState(
     components: Component[],
+    zones: Zone[],
     widthMm: number,
     heightMm: number,
     boundary: Point[],
@@ -11,7 +12,6 @@ export function solveSteadyState(
     resolution: number = 150
 ): HeatmapResult {
     // 0. Ensure Isotropic Grid (dx == dy)
-    // dx is the physical size of one grid cell in mm.
     const dx = Math.max(widthMm, heightMm) / resolution;
     const nx = Math.ceil(widthMm / dx);
     const ny = Math.ceil(heightMm / dx);
@@ -20,6 +20,7 @@ export function solveSteadyState(
     let T = new Float32Array(size).fill(ambientTemp);
     let T_old = new Float32Array(size);
     const Q = new Float32Array(size).fill(0);
+    const kGrid = new Float32Array(size).fill(4.0); // Default PCB conductivity: 4 W/mK
     const isInside = new Uint8Array(size).fill(1);
 
     // Physical Constants (Realistic PCB values)
@@ -27,7 +28,7 @@ export function solveSteadyState(
     const h = 15.0; // W/m²K
     const dxM = dx / 1000; // dx in meters
 
-    // 1. Initialize heat sources (Q)
+    // 2. Initialize Heat Sources & Component Copper Spreading
     for (const comp of components) {
         const area = comp.width * comp.height || 1;
         const powerPerM2 = comp.power / (area / 1000000);
@@ -57,7 +58,7 @@ export function solveSteadyState(
         }
     }
 
-    // 3. Gauss-Seidel Solver
+    // 4. Gauss-Seidel Solver with Variable Conductivity
     const maxIterations = 1000;
     const tolerance = 0.001;
     let iterations = 0;
@@ -86,7 +87,11 @@ export function solveSteadyState(
                 const t_up = T[idx - nx];
                 const t_down = T[idx + nx];
 
-                const newT = (alpha * (t_left + t_right + t_up + t_down) + Q[idx] + beta * ambientTemp) / denom;
+                const alpha = thicknessM * invDx2;
+                const beta = 2 * h; // simplified convection for both sides
+
+                const denom = alpha * (k_w + k_e + k_n + k_s) + beta;
+                const newT = (alpha * (k_w * t_w + k_e * t_e + k_n * t_n + k_s * t_s) + Q[idx] + beta * ambientTemp) / denom;
 
                 T[idx] = newT;
 

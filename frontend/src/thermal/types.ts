@@ -16,6 +16,13 @@ export interface JunctionData {
     warning?: string;
 }
 
+export interface Zone {
+    id: string;
+    name: string;
+    points: Point[];
+    conductivity: number; // W/mK
+}
+
 export interface HeatmapResult {
     data: Float32Array;
     width: number;
