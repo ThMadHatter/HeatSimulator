@@ -1,0 +1,22 @@
+
+> frontend@0.0.0 dev
+> vite
+
+
+  VITE v3.2.11  ready in 487 ms
+
+  ➜  Local:   http://localhost:5173/
+  ➜  Network: use --host to expose
+7:37:39 AM [vite] hmr update /src/components/Toolbar.tsx
+hmr update /src/style.css
+hmr update /src/components/PropertyPanel.tsx
+hmr update /src/style.css
+hmr update /src/components/CanvasView.tsx
+hmr update /src/style.css
+hmr update /src/components/Controls.tsx
+hmr update /src/style.css
+hmr update /src/components/DebugPanel.tsx
+hmr update /src/style.css
+hmr update /src/components/HeatmapOverlay.tsx
+hmr update /src/style.css
+hmr update /src/style.css

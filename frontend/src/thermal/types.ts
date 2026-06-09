@@ -8,9 +8,18 @@ export interface Point {
 export interface JunctionData {
     compId: string;
     tj: number;
+    tpcb: number;
+    rthPcb: number;
     margin: number;
     ratingPercent: number;
     isOverLimit: boolean;
+}
+
+export interface Zone {
+    id: string;
+    name: string;
+    points: Point[];
+    conductivity: number; // W/mK
 }
 
 export interface HeatmapResult {

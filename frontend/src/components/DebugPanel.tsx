@@ -3,7 +3,7 @@ import { useStore } from '../store/useStore';
 import { computeHeatmap } from '../thermal';
 
 const DebugPanel: React.FC = () => {
-  const { components, imageDimensions, calibration, boundary, ambientTemperature, showGrid, setShowGrid } = useStore();
+  const { components, zones, imageDimensions, calibration, boundary, ambientTemperature, showGrid, setShowGrid } = useStore();
 
   const debugInfo = useMemo(() => {
     if (!imageDimensions || !calibration.mmPerPixel || components.length === 0) {
@@ -13,7 +13,7 @@ const DebugPanel: React.FC = () => {
     const widthMm = imageDimensions.width * calibration.mmPerPixel;
     const heightMm = imageDimensions.height * calibration.mmPerPixel;
     const resolution = 150;
-    const result = computeHeatmap(components, widthMm, heightMm, boundary, ambientTemperature, resolution);
+    const result = computeHeatmap(components, zones, widthMm, heightMm, boundary, ambientTemperature, resolution);
 
     // Find hottest junction
     let hottestComp = null;
@@ -32,7 +32,7 @@ const DebugPanel: React.FC = () => {
       gridSize: `${result.width}x${result.height}`,
       boundaryPoints: boundary.length,
     };
-  }, [components, imageDimensions, calibration, boundary, ambientTemperature]);
+  }, [components, zones, imageDimensions, calibration, boundary, ambientTemperature]);
 
   if (!debugInfo) return null;
 

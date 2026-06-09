@@ -1,9 +1,10 @@
 import { Component } from '../store/useStore';
-import { Point, HeatmapResult, JunctionData } from './types';
+import { Point, HeatmapResult, JunctionData, Zone } from './types';
 import { isPointInPolygon } from './utils';
 
 export function solveSteadyState(
     components: Component[],
+    zones: Zone[],
     widthMm: number,
     heightMm: number,
     boundary: Point[],
@@ -11,7 +12,6 @@ export function solveSteadyState(
     resolution: number = 150
 ): HeatmapResult {
     // 0. Ensure Isotropic Grid (dx == dy)
-    // dx is the physical size of one grid cell in mm.
     const dx = Math.max(widthMm, heightMm) / resolution;
     const nx = Math.ceil(widthMm / dx);
     const ny = Math.ceil(heightMm / dx);
@@ -20,14 +20,27 @@ export function solveSteadyState(
     let T = new Float32Array(size).fill(ambientTemp);
     let T_old = new Float32Array(size);
     const Q = new Float32Array(size).fill(0);
+    const kGrid = new Float32Array(size).fill(4.0); // Default PCB conductivity: 4 W/mK
     const isInside = new Uint8Array(size).fill(1);
 
-    // Physical Constants (Realistic PCB values)
-    const k = 25.0; // W/mK
-    const h = 15.0; // W/m²K
+    const h = 15.0; // Convection: W/m²K
     const dxM = dx / 1000; // dx in meters
+    const thicknessM = 0.0016; // PCB thickness: 1.6mm
 
-    // 1. Initialize heat sources (Q)
+    // 1. Initialize Conductivity Map (zones)
+    for (const zone of zones) {
+        for (let j = 0; j < ny; j++) {
+            for (let i = 0; i < nx; i++) {
+                const x = i * dx;
+                const y = j * dx;
+                if (isPointInPolygon({ x, y }, zone.points)) {
+                    kGrid[j * nx + i] = zone.conductivity;
+                }
+            }
+        }
+    }
+
+    // 2. Initialize Heat Sources & Component Copper Spreading
     for (const comp of components) {
         const area = comp.width * comp.height || 1;
         const powerPerM2 = comp.power / (area / 1000000);
@@ -39,12 +52,15 @@ export function solveSteadyState(
 
         for (let j = startY; j <= endY; j++) {
             for (let i = startX; i <= endX; i++) {
-                Q[j * nx + i] += powerPerM2;
+                const idx = j * nx + i;
+                Q[idx] += powerPerM2;
+                // Simulate copper spreading under component: increase k
+                kGrid[idx] = Math.max(kGrid[idx], 25.0);
             }
         }
     }
 
-    // 2. Pre-calculate PCB mask
+    // 3. Pre-calculate PCB mask
     if (boundary && boundary.length >= 3) {
         for (let j = 0; j < ny; j++) {
             for (let i = 0; i < nx; i++) {
@@ -57,14 +73,10 @@ export function solveSteadyState(
         }
     }
 
-    // 3. Gauss-Seidel Solver
+    // 4. Gauss-Seidel Solver with Variable Conductivity
     const maxIterations = 1000;
     const tolerance = 0.001;
-
-    const thicknessM = 0.0016;
-    const alpha = (k * thicknessM) / (dxM * dxM);
-    const beta = h;
-    const denom = 4 * alpha + beta;
+    const invDx2 = 1.0 / (dxM * dxM);
 
     for (let iter = 0; iter < maxIterations; iter++) {
         let maxDiff = 0;
@@ -79,12 +91,27 @@ export function solveSteadyState(
                     continue;
                 }
 
-                const t_left = T[idx - 1];
-                const t_right = T[idx + 1];
-                const t_up = T[idx - nx];
-                const t_down = T[idx + nx];
+                const k_c = kGrid[idx];
+                const k_w = (k_c + kGrid[idx - 1]) / 2;
+                const k_e = (k_c + kGrid[idx + 1]) / 2;
+                const k_n = (k_c + kGrid[idx - nx]) / 2;
+                const k_s = (k_c + kGrid[idx + nx]) / 2;
 
-                const newT = (alpha * (t_left + t_right + t_up + t_down) + Q[idx] + beta * ambientTemp) / denom;
+                const t_w = T[idx - 1];
+                const t_e = T[idx + 1];
+                const t_n = T[idx - nx];
+                const t_s = T[idx + nx];
+
+                // Steady state: Sum(k_face * (T_neighbor - T_center) / dx) * thickness * dx + Q*thickness*dx^2 - 2*h*dx^2*(T_center - Tamb) = 0
+                // (k_w*(t_w - T) + k_e*(t_e - T) + k_n*(t_n - T) + k_s*(t_s - T)) * thickness / dx^2 + Q - 2*h*(T - Tamb)/thickness = 0
+                // Let alpha = thickness / dx^2, beta = 2*h / thickness
+                // (k_w*t_w + k_e*t_e + k_n*t_n + k_s*t_s) * alpha + Q + beta * Tamb = T * (alpha * (k_w + k_e + k_n + k_s) + beta)
+
+                const alpha = thicknessM * invDx2;
+                const beta = 2 * h; // simplified convection for both sides
+
+                const denom = alpha * (k_w + k_e + k_n + k_s) + beta;
+                const newT = (alpha * (k_w * t_w + k_e * t_e + k_n * t_n + k_s * t_s) + Q[idx] + beta * ambientTemp) / denom;
 
                 T[idx] = newT;
 
@@ -96,13 +123,39 @@ export function solveSteadyState(
         if (maxDiff < tolerance) break;
     }
 
-    // 4. Compute Junctions & Max Temp
+    // 5. Compute Junctions & RthetaPCB
     const junctions: JunctionData[] = components.map(comp => {
-        const tj = ambientTemp + (comp.power * (comp.thetaJA || 0));
+        // Find all cells inside footprint
+        const startX = Math.max(0, Math.floor((comp.x - comp.width / 2) / dx));
+        const endX = Math.min(nx - 1, Math.floor((comp.x + comp.width / 2) / dx));
+        const startY = Math.max(0, Math.floor((comp.y - comp.height / 2) / dx));
+        const endY = Math.min(ny - 1, Math.floor((comp.y + comp.height / 2) / dx));
+
+        let sumT = 0;
+        let count = 0;
+        for (let j = startY; j <= endY; j++) {
+            for (let i = startX; i <= endX; i++) {
+                sumT += T[j * nx + i];
+                count++;
+            }
+        }
+
+        const tpcb = count > 0 ? sumT / count : ambientTemp;
+        const rthPcb = comp.power > 0 ? (tpcb - ambientTemp) / comp.power : 0;
+
+        let tj = tpcb;
+        if (comp.thetaJC !== undefined && comp.thetaJC > 0) {
+            tj = tpcb + comp.power * comp.thetaJC;
+        } else if (comp.thetaJA !== undefined && comp.thetaJA > 0) {
+            tj = ambientTemp + comp.power * comp.thetaJA;
+        }
+
         const maxT = comp.maxTemperature || 125;
         return {
             compId: comp.id,
             tj,
+            tpcb,
+            rthPcb,
             margin: maxT - tj,
             ratingPercent: (tj / maxT) * 100,
             isOverLimit: tj > maxT
