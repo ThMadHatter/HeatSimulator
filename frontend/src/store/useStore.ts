@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { Zone, HeatmapResult } from '../thermal/types';
+import { Zone, HeatmapResult, Stackup } from '../thermal/types';
 
 export interface Component {
   id: string;
@@ -21,13 +21,14 @@ export interface Calibration {
   mmPerPixel: number | null;
 }
 
-export type InteractionMode = 'select' | 'calibrate' | 'addComponent' | 'drawBoundary';
+export type InteractionMode = 'select' | 'calibrate' | 'addComponent' | 'drawBoundary' | 'drawZone';
 
 interface State {
   image: string | null;
   imageDimensions: { width: number; height: number } | null;
   components: Component[];
   zones: Zone[];
+  stackup: Stackup;
   calibration: Calibration;
   boundary: { x: number; y: number }[]; // in mm
   ambientTemperature: number; // °C
@@ -35,8 +36,10 @@ interface State {
 
   mode: InteractionMode;
   selectedComponentId: string | null;
+  selectedZoneId: string | null;
   heatmapOpacity: number;
   showGrid: boolean;
+  showConductivityMap: boolean;
   heatmapResult: HeatmapResult | null;
 
   // Actions
@@ -46,6 +49,13 @@ interface State {
   updateComponent: (id: string, updates: Partial<Component>) => void;
   removeComponent: (id: string) => void;
   selectComponent: (id: string | null) => void;
+
+  addZone: (zone: Zone) => void;
+  updateZone: (id: string, updates: Partial<Zone>) => void;
+  removeZone: (id: string) => void;
+  selectZone: (id: string | null) => void;
+
+  setStackup: (stackup: Partial<Stackup>) => void;
 
   setCalibrationPoint: (point: { x: number; y: number }) => void;
   setCalibrationDistance: (distance: number) => void;
@@ -63,6 +73,7 @@ interface State {
 
   setHeatmapOpacity: (opacity: number) => void;
   setShowGrid: (showGrid: boolean) => void;
+  setShowConductivityMap: (show: boolean) => void;
   setHeatmapResult: (result: HeatmapResult | null) => void;
 }
 
@@ -71,6 +82,12 @@ export const useStore = create<State>((set) => ({
   imageDimensions: null,
   components: [],
   zones: [],
+  stackup: {
+    boardThicknessMm: 1.6,
+    layerCount: 2,
+    copperOzPerLayer: 1,
+    estimatedCopperCoveragePercent: 80,
+  },
   calibration: {
     point1: null,
     point2: null,
@@ -83,8 +100,10 @@ export const useStore = create<State>((set) => ({
 
   mode: 'select',
   selectedComponentId: null,
+  selectedZoneId: null,
   heatmapOpacity: 0.6,
   showGrid: false,
+  showConductivityMap: false,
   heatmapResult: null,
 
   setImage: (image, width, height) => set({
@@ -104,7 +123,19 @@ export const useStore = create<State>((set) => ({
     components: state.components.filter((c) => c.id !== id),
     selectedComponentId: state.selectedComponentId === id ? null : state.selectedComponentId,
   })),
-  selectComponent: (id) => set({ selectedComponentId: id }),
+  selectComponent: (id) => set({ selectedComponentId: id, selectedZoneId: null }),
+
+  addZone: (zone) => set((state) => ({ zones: [...state.zones, zone] })),
+  updateZone: (id, updates) => set((state) => ({
+    zones: state.zones.map((z) => (z.id === id ? { ...z, ...updates } : z)),
+  })),
+  removeZone: (id) => set((state) => ({
+    zones: state.zones.filter((z) => z.id !== id),
+    selectedZoneId: state.selectedZoneId === id ? null : state.selectedZoneId,
+  })),
+  selectZone: (id) => set({ selectedZoneId: id, selectedComponentId: null }),
+
+  setStackup: (updates) => set((state) => ({ stackup: { ...state.stackup, ...updates } })),
 
   setCalibrationPoint: (point) => set((state) => {
     if (!state.calibration.point1) {
@@ -150,6 +181,7 @@ export const useStore = create<State>((set) => ({
 
   setHeatmapOpacity: (heatmapOpacity) => set({ heatmapOpacity }),
   setShowGrid: (showGrid: boolean) => set({ showGrid }),
+  setShowConductivityMap: (showConductivityMap: boolean) => set({ showConductivityMap }),
   setHeatmapResult: (heatmapResult) => set({ heatmapResult }),
 }));
 

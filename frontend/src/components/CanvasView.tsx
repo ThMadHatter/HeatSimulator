@@ -7,6 +7,7 @@ import Legend from './Legend';
 import { KonvaEventObject } from 'konva/lib/Node';
 import { computeHeatmap } from '../thermal';
 import Konva from 'konva';
+import { Zone } from '../thermal/types';
 
 const CanvasView: React.FC = () => {
   const {
@@ -14,7 +15,9 @@ const CanvasView: React.FC = () => {
     updateComponent, selectComponent, selectedComponentId,
     calibration, setCalibrationPoint,
     boundary, addBoundaryPoint, updateBoundaryPoint, removeBoundaryPoint,
-    insertBoundaryPoint, ambientTemperature, showGrid
+    insertBoundaryPoint, ambientTemperature, showGrid,
+    zones, addZone, updateZone, removeZone, selectZone, selectedZoneId,
+    stackup, heatmapResult, setHeatmapResult
   } = useStore();
 
   const [stage, setStage] = useState({
@@ -28,7 +31,7 @@ const CanvasView: React.FC = () => {
     setHeatmapRange({ min, max });
   }, []);
 
-  const [mousePos, setMousePos] = useState({ x: 0, y: 0, mmX: 0, mmY: 0, temp: 0 });
+  const [mousePos, setMousePos] = useState({ x: 0, y: 0, mmX: 0, mmY: 0, temp: 0, k: 0 });
   const [bgImage, setBgImage] = useState<HTMLImageElement | null>(null);
   const stageRef = useRef<any>(null);
   const [opacity, setOpacity] = useState(1);
@@ -54,8 +57,6 @@ const CanvasView: React.FC = () => {
     }
   }, [image]);
 
-  const { zones, heatmapResult, setHeatmapResult } = useStore();
-
   useEffect(() => {
     if (!imageDimensions || !calibration.mmPerPixel || components.length === 0) {
         setHeatmapResult(null);
@@ -68,10 +69,11 @@ const CanvasView: React.FC = () => {
         imageDimensions.height * calibration.mmPerPixel,
         boundary,
         ambientTemperature,
-        150
+        150,
+        stackup
     );
     setHeatmapResult(result);
-  }, [components, zones, imageDimensions, calibration, boundary, ambientTemperature, setHeatmapResult]);
+  }, [components, zones, imageDimensions, calibration, boundary, ambientTemperature, stackup, setHeatmapResult]);
 
   const handleMouseMove = (e: any) => {
     const stageObj = e.target.getStage();
@@ -79,6 +81,7 @@ const CanvasView: React.FC = () => {
     if (!pointer) return;
 
     let temp = ambientTemperature;
+    let k = 0;
     let mmX = 0;
     let mmY = 0;
 
@@ -91,12 +94,14 @@ const CanvasView: React.FC = () => {
             const gridX = Math.floor(mmX / dx);
             const gridY = Math.floor(mmY / dx);
             if (gridX >= 0 && gridX < heatmapResult.width && gridY >= 0 && gridY < heatmapResult.height) {
-                temp = heatmapResult.data[gridY * heatmapResult.width + gridX];
+                const idx = gridY * heatmapResult.width + gridX;
+                temp = heatmapResult.data[idx];
+                k = heatmapResult.kGrid[idx];
             }
         }
     }
 
-    setMousePos({ x: pointer.x, y: pointer.y, mmX, mmY, temp });
+    setMousePos({ x: pointer.x, y: pointer.y, mmX, mmY, temp, k });
   };
 
   const handleWheel = (e: KonvaEventObject<WheelEvent>) => {
@@ -143,6 +148,33 @@ const CanvasView: React.FC = () => {
         return;
     }
 
+    if (mode === 'drawZone') {
+        if (!calibration.mmPerPixel) {
+            alert("Calibrate first!");
+            return;
+        }
+        const mmX = pos.x * calibration.mmPerPixel;
+        const mmY = pos.y * calibration.mmPerPixel;
+
+        if (!selectedZoneId) {
+            const newZone: Zone = {
+                id: Math.random().toString(36).substr(2, 9),
+                label: `Zone ${zones.length + 1}`,
+                points: [{ x: mmX, y: mmY }],
+                conductivity: 50.0,
+                enabled: true
+            };
+            addZone(newZone);
+            selectZone(newZone.id);
+        } else {
+            const zone = zones.find(z => z.id === selectedZoneId);
+            if (zone) {
+                updateZone(selectedZoneId, { points: [...zone.points, { x: mmX, y: mmY }] });
+            }
+        }
+        return;
+    }
+
     if (mode === 'addComponent') {
       if (!calibration.mmPerPixel) {
         alert("Please calibrate the scale first!");
@@ -167,6 +199,7 @@ const CanvasView: React.FC = () => {
     // Clicked on background, deselect
     if (e.target === e.target.getStage()) {
       selectComponent(null);
+      selectZone(null);
     }
   };
 
@@ -205,7 +238,7 @@ const CanvasView: React.FC = () => {
         onClick={handleStageClick}
         onMouseMove={handleMouseMove}
         onDragEnd={handleDragEnd}
-        draggable={mode === 'select' && !selectedComponentId}
+        draggable={mode === 'select' && !selectedComponentId && !selectedZoneId}
         ref={stageRef}
       >
         <Layer>
@@ -218,6 +251,88 @@ const CanvasView: React.FC = () => {
               onResult={handleHeatmapResult}
             />
           )}
+
+          {/* Zones */}
+          {zones.map(zone => {
+              const pointsPx = zone.points.flatMap(p => [mmToPx(p.x), mmToPx(p.y)]);
+              const isSelected = zone.id === selectedZoneId;
+              return (
+                  <Group key={zone.id}>
+                    <Line
+                        points={pointsPx}
+                        stroke={isSelected ? "#3b82f6" : "#f59e0b"}
+                        strokeWidth={isSelected ? 4 / stage.scale : 2 / stage.scale}
+                        closed={true}
+                        fill={isSelected ? "#3b82f622" : "#f59e0b22"}
+                        hitStrokeWidth={20 / stage.scale}
+                        onClick={(e) => {
+                            e.cancelBubble = true;
+                            selectZone(zone.id);
+
+                            if (mode === 'drawZone' && isSelected && calibration.mmPerPixel) {
+                                const stageObj = e.target.getStage();
+                                const pos = stageObj?.getRelativePointerPosition();
+                                if (pos) {
+                                    let minD = Infinity;
+                                    let insertIdx = zone.points.length;
+                                    for (let i = 0; i < zone.points.length; i++) {
+                                        const p1 = { x: mmToPx(zone.points[i].x), y: mmToPx(zone.points[i].y) };
+                                        const p2 = {
+                                            x: mmToPx(zone.points[(i + 1) % zone.points.length].x),
+                                            y: mmToPx(zone.points[(i + 1) % zone.points.length].y)
+                                        };
+                                        const px = pos.x, py = pos.y;
+                                        const l2 = Math.pow(p1.x - p2.x, 2) + Math.pow(p1.y - p2.y, 2);
+                                        if (l2 === 0) continue;
+                                        let t = ((px - p1.x) * (p2.x - p1.x) + (py - p1.y) * (p2.y - p1.y)) / l2;
+                                        t = Math.max(0, Math.min(1, t));
+                                        const d = Math.sqrt(Math.pow(px - (p1.x + t * (p2.x - p1.x)), 2) + Math.pow(py - (p1.y + t * (p2.y - p1.y)), 2));
+                                        if (d < minD) { minD = d; insertIdx = i + 1; }
+                                    }
+                                    if (minD < 20 / stage.scale) {
+                                        const newPoints = [...zone.points];
+                                        newPoints.splice(insertIdx, 0, {
+                                            x: pos.x * calibration.mmPerPixel,
+                                            y: pos.y * calibration.mmPerPixel
+                                        });
+                                        updateZone(zone.id, { points: newPoints });
+                                    }
+                                }
+                            }
+                        }}
+                    />
+                    {isSelected && zone.points.map((p, i) => (
+                        <Circle
+                            key={`zone-${zone.id}-p-${i}`}
+                            x={mmToPx(p.x)}
+                            y={mmToPx(p.y)}
+                            radius={6 / stage.scale}
+                            fill="#f59e0b"
+                            stroke="white"
+                            strokeWidth={1 / stage.scale}
+                            draggable
+                            onDragMove={(e) => {
+                                if (calibration.mmPerPixel) {
+                                    const newPoints = [...zone.points];
+                                    newPoints[i] = {
+                                        x: e.target.x() * calibration.mmPerPixel,
+                                        y: e.target.y() * calibration.mmPerPixel,
+                                    };
+                                    updateZone(zone.id, { points: newPoints });
+                                }
+                            }}
+                            onClick={(e) => {
+                                e.cancelBubble = true;
+                                if (e.evt.altKey || e.evt.shiftKey) {
+                                    const newPoints = zone.points.filter((_, idx) => idx !== i);
+                                    updateZone(zone.id, { points: newPoints });
+                                }
+                            }}
+                        />
+                    ))}
+                  </Group>
+              );
+          })}
 
           {/* Boundary */}
           {boundary.length > 0 && (
@@ -234,13 +349,6 @@ const CanvasView: React.FC = () => {
                             const stageObj = e.target.getStage();
                             const pos = stageObj?.getRelativePointerPosition();
                             if (pos) {
-                                // Find the closest segment to insert a point
-                                // For simplicity, we can just find where on the line we clicked.
-                                // Line.getPointOnLine might be useful but we can use our own logic.
-                                // Actually, let's just append if it's not a clear segment click,
-                                // or better: find the index where to insert.
-
-                                // Simplified approach: find the segment (i, i+1) that is closest to the click
                                 let minD = Infinity;
                                 let insertIdx = boundary.length;
 
@@ -251,7 +359,6 @@ const CanvasView: React.FC = () => {
                                         y: mmToPx(boundary[(i + 1) % boundary.length].y)
                                     };
 
-                                    // Distance from point to segment
                                     const px = pos.x, py = pos.y;
                                     const l2 = Math.pow(p1.x - p2.x, 2) + Math.pow(p1.y - p2.y, 2);
                                     if (l2 === 0) continue;
@@ -450,6 +557,7 @@ const CanvasView: React.FC = () => {
                 <span className="text-gray-400">POS X:</span> <span>{mousePos.mmX.toFixed(1)} mm</span>
                 <span className="text-gray-400">POS Y:</span> <span>{mousePos.mmY.toFixed(1)} mm</span>
                 <span className="text-gray-400">TEMP:</span> <span className={mousePos.temp > 80 ? "text-red-400" : "text-green-400"}>{mousePos.temp.toFixed(1)} °C</span>
+                <span className="text-gray-400">k:</span> <span className="text-blue-300">{mousePos.k.toFixed(1)} W/mK</span>
             </div>
 
             {(() => {
@@ -482,6 +590,13 @@ const CanvasView: React.FC = () => {
       {mode === 'drawBoundary' && (
         <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-emerald-600 text-white px-4 py-2 rounded-full shadow-lg pointer-events-none text-center">
           Click background to add points. Drag vertices to move.<br/>
+          Click boundary line to insert point. Alt+Click vertex to remove.
+        </div>
+      )}
+
+      {mode === 'drawZone' && (
+        <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-orange-600 text-white px-4 py-2 rounded-full shadow-lg pointer-events-none text-center">
+          Click background to start/add to zone. Drag vertices to move.<br/>
           Click boundary line to insert point. Alt+Click vertex to remove.
         </div>
       )}

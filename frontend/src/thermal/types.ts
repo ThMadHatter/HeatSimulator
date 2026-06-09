@@ -18,13 +18,22 @@ export interface JunctionData {
 
 export interface Zone {
     id: string;
-    name: string;
+    label: string;
     points: Point[];
     conductivity: number; // W/mK
+    enabled: boolean;
+}
+
+export interface Stackup {
+    boardThicknessMm: number;
+    layerCount: number;
+    copperOzPerLayer: number;
+    estimatedCopperCoveragePercent: number;
 }
 
 export interface HeatmapResult {
     data: Float32Array;
+    kGrid: Float32Array;
     width: number;
     height: number;
     minTemp: number;

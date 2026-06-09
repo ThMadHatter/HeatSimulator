@@ -1,6 +1,6 @@
 import React from 'react';
 import { useStore } from '../store/useStore';
-import { Upload, Ruler, Plus, MousePointer2, Square, Trash2, Scan } from 'lucide-react';
+import { Upload, Ruler, Plus, MousePointer2, Square, Trash2, Scan, Zap } from 'lucide-react';
 import { SelectImage, LoadImage } from '../../wailsjs/go/main/App';
 import { detectPCBOutline, isOpenCVReady } from '../thermal/edgeDetection';
 
@@ -100,6 +100,14 @@ const Toolbar: React.FC = () => {
         title="Draw PCB Boundary"
       >
         <Square size={24} />
+      </button>
+
+      <button
+        onClick={() => setMode('drawZone')}
+        className={`p-2 rounded transition-colors ${mode === 'drawZone' ? 'bg-blue-600' : 'hover:bg-gray-700'}`}
+        title="Draw Conductivity Zone"
+      >
+        <Zap size={24} />
       </button>
 
       <button
