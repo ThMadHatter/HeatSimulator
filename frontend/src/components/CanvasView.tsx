@@ -13,7 +13,8 @@ const CanvasView: React.FC = () => {
     image, imageDimensions, mode, components, addComponent,
     updateComponent, selectComponent, selectedComponentId,
     calibration, setCalibrationPoint,
-    boundary, addBoundaryPoint, ambientTemperature
+    boundary, addBoundaryPoint, updateBoundaryPoint, removeBoundaryPoint,
+    insertBoundaryPoint, ambientTemperature, showGrid
   } = useStore();
 
   const [stage, setStage] = useState({
@@ -79,10 +80,11 @@ const CanvasView: React.FC = () => {
         mmY = pointer.y * calibration.mmPerPixel;
 
         if (heatmapResult && imageDimensions) {
-            const gridX = Math.floor((mmX / (imageDimensions.width * calibration.mmPerPixel)) * 150);
-            const gridY = Math.floor((mmY / (imageDimensions.height * calibration.mmPerPixel)) * 150);
-            if (gridX >= 0 && gridX < 150 && gridY >= 0 && gridY < 150) {
-                temp = heatmapResult.data[gridY * 150 + gridX];
+            const dx = Math.max(imageDimensions.width * calibration.mmPerPixel, imageDimensions.height * calibration.mmPerPixel) / 150;
+            const gridX = Math.floor(mmX / dx);
+            const gridY = Math.floor(mmY / dx);
+            if (gridX >= 0 && gridX < heatmapResult.width && gridY >= 0 && gridY < heatmapResult.height) {
+                temp = heatmapResult.data[gridY * heatmapResult.width + gridX];
             }
         }
     }
@@ -214,13 +216,88 @@ const CanvasView: React.FC = () => {
 
           {/* Boundary */}
           {boundary.length > 0 && (
-              <Line
-                points={boundaryPointsPx}
-                stroke="#10b981"
-                strokeWidth={2 / stage.scale}
-                closed={true}
-                fill="#10b98122"
-              />
+              <Group>
+                <Line
+                    points={boundaryPointsPx}
+                    stroke="#10b981"
+                    strokeWidth={4 / stage.scale}
+                    closed={true}
+                    fill="#10b98122"
+                    hitStrokeWidth={20 / stage.scale}
+                    onClick={(e) => {
+                        if (mode === 'drawBoundary' && calibration.mmPerPixel) {
+                            const stageObj = e.target.getStage();
+                            const pos = stageObj?.getRelativePointerPosition();
+                            if (pos) {
+                                // Find the closest segment to insert a point
+                                // For simplicity, we can just find where on the line we clicked.
+                                // Line.getPointOnLine might be useful but we can use our own logic.
+                                // Actually, let's just append if it's not a clear segment click,
+                                // or better: find the index where to insert.
+
+                                // Simplified approach: find the segment (i, i+1) that is closest to the click
+                                let minD = Infinity;
+                                let insertIdx = boundary.length;
+
+                                for (let i = 0; i < boundary.length; i++) {
+                                    const p1 = { x: mmToPx(boundary[i].x), y: mmToPx(boundary[i].y) };
+                                    const p2 = {
+                                        x: mmToPx(boundary[(i + 1) % boundary.length].x),
+                                        y: mmToPx(boundary[(i + 1) % boundary.length].y)
+                                    };
+
+                                    // Distance from point to segment
+                                    const px = pos.x, py = pos.y;
+                                    const l2 = Math.pow(p1.x - p2.x, 2) + Math.pow(p1.y - p2.y, 2);
+                                    if (l2 === 0) continue;
+                                    let t = ((px - p1.x) * (p2.x - p1.x) + (py - p1.y) * (p2.y - p1.y)) / l2;
+                                    t = Math.max(0, Math.min(1, t));
+                                    const d = Math.sqrt(Math.pow(px - (p1.x + t * (p2.x - p1.x)), 2) + Math.pow(py - (p1.y + t * (p2.y - p1.y)), 2));
+
+                                    if (d < minD) {
+                                        minD = d;
+                                        insertIdx = i + 1;
+                                    }
+                                }
+
+                                if (minD < 20 / stage.scale) {
+                                    insertBoundaryPoint(insertIdx, {
+                                        x: pos.x * calibration.mmPerPixel,
+                                        y: pos.y * calibration.mmPerPixel
+                                    });
+                                    e.cancelBubble = true;
+                                }
+                            }
+                        }
+                    }}
+                />
+                {mode === 'drawBoundary' && boundary.map((p, i) => (
+                    <Circle
+                        key={`boundary-point-${i}`}
+                        x={mmToPx(p.x)}
+                        y={mmToPx(p.y)}
+                        radius={6 / stage.scale}
+                        fill="#10b981"
+                        stroke="white"
+                        strokeWidth={1 / stage.scale}
+                        draggable
+                        onDragMove={(e) => {
+                            if (calibration.mmPerPixel) {
+                                updateBoundaryPoint(i, {
+                                    x: e.target.x() * calibration.mmPerPixel,
+                                    y: e.target.y() * calibration.mmPerPixel,
+                                });
+                            }
+                        }}
+                        onClick={(e) => {
+                            e.cancelBubble = true;
+                            if (e.evt.altKey || e.evt.shiftKey) {
+                                removeBoundaryPoint(i);
+                            }
+                        }}
+                    />
+                ))}
+              </Group>
           )}
 
           {/* Calibration Overlay */}
@@ -237,6 +314,36 @@ const CanvasView: React.FC = () => {
               strokeWidth={2 / stage.scale}
             />
           )}
+
+          {/* Grid Debug */}
+          {showGrid && heatmapResult && imageDimensions && calibration.mmPerPixel && (() => {
+              const dx = Math.max(imageDimensions.width * calibration.mmPerPixel, imageDimensions.height * calibration.mmPerPixel) / 150;
+              const gridLines = [];
+              const nx = heatmapResult.width;
+              const ny = heatmapResult.height;
+
+              for (let i = 0; i <= nx; i++) {
+                  gridLines.push(
+                      <Line
+                          key={`v-${i}`}
+                          points={[mmToPx(i * dx), 0, mmToPx(i * dx), mmToPx(ny * dx)]}
+                          stroke="rgba(255,255,255,0.2)"
+                          strokeWidth={1 / stage.scale}
+                      />
+                  );
+              }
+              for (let j = 0; j <= ny; j++) {
+                  gridLines.push(
+                      <Line
+                          key={`h-${j}`}
+                          points={[0, mmToPx(j * dx), mmToPx(nx * dx), mmToPx(j * dx)]}
+                          stroke="rgba(255,255,255,0.2)"
+                          strokeWidth={1 / stage.scale}
+                      />
+                  );
+              }
+              return gridLines;
+          })()}
 
           {/* Components */}
           {components.map((comp) => {
@@ -345,8 +452,9 @@ const CanvasView: React.FC = () => {
       )}
 
       {mode === 'drawBoundary' && (
-        <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-emerald-600 text-white px-4 py-2 rounded-full shadow-lg pointer-events-none">
-          Click to define PCB boundary points
+        <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-emerald-600 text-white px-4 py-2 rounded-full shadow-lg pointer-events-none text-center">
+          Click background to add points. Drag vertices to move.<br/>
+          Click boundary line to insert point. Alt+Click vertex to remove.
         </div>
       )}
 

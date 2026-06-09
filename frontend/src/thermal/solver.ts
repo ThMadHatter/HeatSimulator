@@ -10,49 +10,48 @@ export function solveSteadyState(
     ambientTemp: number,
     resolution: number = 150
 ): HeatmapResult {
-    const size = resolution * resolution;
+    // 0. Ensure Isotropic Grid (dx == dy)
+    // dx is the physical size of one grid cell in mm.
+    const dx = Math.max(widthMm, heightMm) / resolution;
+    const nx = Math.ceil(widthMm / dx);
+    const ny = Math.ceil(heightMm / dx);
+    const size = nx * ny;
+
     let T = new Float32Array(size).fill(ambientTemp);
     let T_old = new Float32Array(size);
     const Q = new Float32Array(size).fill(0);
     const isInside = new Uint8Array(size).fill(1);
 
-    const dx = widthMm / resolution;
-    const dy = heightMm / resolution;
-
     // Physical Constants (Realistic PCB values)
-    // k = thermal conductivity (W/mK). FR4 ~ 0.3, Copper ~ 400.
-    // High-copper PCB effective k can be 20-50 W/mK.
-    const k = 25.0;
-    // h = convection coeff (W/m²K). Natural convection is 5-25.
-    const h = 15.0;
-    const dxM = dx / 1000;
+    const k = 25.0; // W/mK
+    const h = 15.0; // W/m²K
+    const dxM = dx / 1000; // dx in meters
 
     // 1. Initialize heat sources (Q)
     for (const comp of components) {
         const area = comp.width * comp.height || 1;
-        // powerDensity (W/m²)
         const powerPerM2 = comp.power / (area / 1000000);
 
-        const startX = Math.max(0, Math.floor(((comp.x - comp.width / 2) / widthMm) * resolution));
-        const endX = Math.min(resolution - 1, Math.floor(((comp.x + comp.width / 2) / widthMm) * resolution));
-        const startY = Math.max(0, Math.floor(((comp.y - comp.height / 2) / heightMm) * resolution));
-        const endY = Math.min(resolution - 1, Math.floor(((comp.y + comp.height / 2) / heightMm) * resolution));
+        const startX = Math.max(0, Math.floor((comp.x - comp.width / 2) / dx));
+        const endX = Math.min(nx - 1, Math.floor((comp.x + comp.width / 2) / dx));
+        const startY = Math.max(0, Math.floor((comp.y - comp.height / 2) / dx));
+        const endY = Math.min(ny - 1, Math.floor((comp.y + comp.height / 2) / dx));
 
         for (let j = startY; j <= endY; j++) {
             for (let i = startX; i <= endX; i++) {
-                Q[j * resolution + i] += powerPerM2;
+                Q[j * nx + i] += powerPerM2;
             }
         }
     }
 
     // 2. Pre-calculate PCB mask
-    if (boundary.length >= 3) {
-        for (let j = 0; j < resolution; j++) {
-            for (let i = 0; i < resolution; i++) {
+    if (boundary && boundary.length >= 3) {
+        for (let j = 0; j < ny; j++) {
+            for (let i = 0; i < nx; i++) {
                 const x = i * dx;
-                const y = j * dy;
+                const y = j * dx;
                 if (!isPointInPolygon({ x, y }, boundary)) {
-                    isInside[j * resolution + i] = 0;
+                    isInside[j * nx + i] = 0;
                 }
             }
         }
@@ -62,7 +61,6 @@ export function solveSteadyState(
     const maxIterations = 1000;
     const tolerance = 0.001;
 
-    // Equation: k*thickness*(d2T/dx2 + d2T/dy2) + Q_surf - h*(T - Tamb) = 0
     const thicknessM = 0.0016;
     const alpha = (k * thicknessM) / (dxM * dxM);
     const beta = h;
@@ -72,9 +70,9 @@ export function solveSteadyState(
         let maxDiff = 0;
         T_old.set(T);
 
-        for (let j = 1; j < resolution - 1; j++) {
-            for (let i = 1; i < resolution - 1; i++) {
-                const idx = j * resolution + i;
+        for (let j = 1; j < ny - 1; j++) {
+            for (let i = 1; i < nx - 1; i++) {
+                const idx = j * nx + i;
 
                 if (isInside[idx] === 0) {
                     T[idx] = ambientTemp;
@@ -83,8 +81,8 @@ export function solveSteadyState(
 
                 const t_left = T[idx - 1];
                 const t_right = T[idx + 1];
-                const t_up = T[idx - resolution];
-                const t_down = T[idx + resolution];
+                const t_up = T[idx - nx];
+                const t_down = T[idx + nx];
 
                 const newT = (alpha * (t_left + t_right + t_up + t_down) + Q[idx] + beta * ambientTemp) / denom;
 
@@ -98,7 +96,7 @@ export function solveSteadyState(
         if (maxDiff < tolerance) break;
     }
 
-    // 4. Compute Junctions
+    // 4. Compute Junctions & Max Temp
     const junctions: JunctionData[] = components.map(comp => {
         const tj = ambientTemp + (comp.power * (comp.thetaJA || 0));
         const maxT = comp.maxTemperature || 125;
@@ -120,8 +118,8 @@ export function solveSteadyState(
 
     return {
         data: T,
-        width: resolution,
-        height: resolution,
+        width: nx,
+        height: ny,
         minTemp: ambientTemp,
         maxTemp: Math.max(maxBoardT, junctionMax),
         junctions

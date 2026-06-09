@@ -35,6 +35,7 @@ interface State {
   mode: InteractionMode;
   selectedComponentId: string | null;
   heatmapOpacity: number;
+  showGrid: boolean;
 
   // Actions
   setImage: (image: string | null, width?: number, height?: number) => void;
@@ -50,6 +51,9 @@ interface State {
 
   setBoundary: (points: { x: number; y: number }[]) => void;
   addBoundaryPoint: (point: { x: number; y: number }) => void;
+  insertBoundaryPoint: (index: number, point: { x: number; y: number }) => void;
+  updateBoundaryPoint: (index: number, point: { x: number; y: number }) => void;
+  removeBoundaryPoint: (index: number) => void;
   clearBoundary: () => void;
 
   setAmbientTemperature: (temp: number) => void;
@@ -57,6 +61,7 @@ interface State {
   setGlobalMaxTemperature: (temp: number | null) => void;
 
   setHeatmapOpacity: (opacity: number) => void;
+  setShowGrid: (showGrid: boolean) => void;
 }
 
 export const useStore = create<State>((set) => ({
@@ -77,6 +82,7 @@ export const useStore = create<State>((set) => ({
   mode: 'select',
   selectedComponentId: null,
   heatmapOpacity: 0.6,
+  showGrid: false,
 
   setImage: (image, width, height) => set({
     image,
@@ -122,6 +128,17 @@ export const useStore = create<State>((set) => ({
 
   setBoundary: (boundary) => set({ boundary }),
   addBoundaryPoint: (point) => set((state) => ({ boundary: [...state.boundary, point] })),
+  insertBoundaryPoint: (index, point) => set((state) => {
+    const newBoundary = [...state.boundary];
+    newBoundary.splice(index, 0, point);
+    return { boundary: newBoundary };
+  }),
+  updateBoundaryPoint: (index, point) => set((state) => ({
+    boundary: state.boundary.map((p, i) => (i === index ? point : p)),
+  })),
+  removeBoundaryPoint: (index) => set((state) => ({
+    boundary: state.boundary.filter((_, i) => i !== index),
+  })),
   clearBoundary: () => set({ boundary: [] }),
 
   setAmbientTemperature: (ambientTemperature) => set({ ambientTemperature }),
@@ -129,4 +146,5 @@ export const useStore = create<State>((set) => ({
   setGlobalMaxTemperature: (globalMaxTemperature) => set({ globalMaxTemperature }),
 
   setHeatmapOpacity: (heatmapOpacity) => set({ heatmapOpacity }),
+  setShowGrid: (showGrid: boolean) => set({ showGrid }),
 }));
