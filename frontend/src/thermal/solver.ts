@@ -11,6 +11,20 @@ export function solveSteadyState(
     ambientTemp: number,
     resolution: number = 150
 ): HeatmapResult {
+    // 0. Input Validation
+    if (widthMm <= 0 || heightMm <= 0) throw new Error("Invalid board dimensions");
+    if (resolution <= 0) throw new Error("Invalid resolution");
+    if (ambientTemp < -273.15) throw new Error("Ambient temperature below absolute zero");
+
+    for (const comp of components) {
+        if (comp.width <= 0 || comp.height <= 0) {
+            throw new Error(`Component ${comp.name} has invalid dimensions`);
+        }
+        if (comp.power < 0) {
+            throw new Error(`Component ${comp.name} has negative power`);
+        }
+    }
+
     // 0. Ensure Isotropic Grid (dx == dy)
     const dx = Math.max(widthMm, heightMm) / resolution;
     const nx = Math.ceil(widthMm / dx);
@@ -18,9 +32,7 @@ export function solveSteadyState(
     const size = nx * ny;
 
     let T = new Float32Array(size).fill(ambientTemp);
-    let T_old = new Float32Array(size);
     const Q = new Float32Array(size).fill(0);
-    const kGrid = new Float32Array(size).fill(4.0); // Default PCB conductivity: 4 W/mK
     const isInside = new Uint8Array(size).fill(1);
 
     // Physical Constants (Realistic PCB values)
@@ -58,23 +70,23 @@ export function solveSteadyState(
         }
     }
 
-    // 4. Gauss-Seidel Solver with Variable Conductivity
+    // 4. Gauss-Seidel Solver
     const maxIterations = 1000;
     const tolerance = 0.001;
     let iterations = 0;
 
-    const thicknessM = 0.0016;
-    const alpha = (k * thicknessM) / (dxM * dxM);
-    const beta = h;
+    const thicknessM = 0.0016; // Standard PCB thickness 1.6mm
+    const invDx2 = 1 / (dxM * dxM);
+    const alpha = k * thicknessM * invDx2;
+    const beta = 2 * h; // Convection on both sides (top and bottom)
     const denom = 4 * alpha + beta;
 
     for (let iter = 0; iter < maxIterations; iter++) {
         iterations = iter + 1;
         let maxDiff = 0;
-        T_old.set(T);
 
-        for (let j = 1; j < ny - 1; j++) {
-            for (let i = 1; i < nx - 1; i++) {
+        for (let j = 0; j < ny; j++) {
+            for (let i = 0; i < nx; i++) {
                 const idx = j * nx + i;
 
                 if (isInside[idx] === 0) {
@@ -82,21 +94,21 @@ export function solveSteadyState(
                     continue;
                 }
 
-                const t_left = T[idx - 1];
-                const t_right = T[idx + 1];
-                const t_up = T[idx - nx];
-                const t_down = T[idx + nx];
+                const t_left  = i > 0      ? T[idx - 1]  : ambientTemp;
+                const t_right = i < nx - 1 ? T[idx + 1]  : ambientTemp;
+                const t_up    = j > 0      ? T[idx - nx] : ambientTemp;
+                const t_down  = j < ny - 1 ? T[idx + nx] : ambientTemp;
 
-                const alpha = thicknessM * invDx2;
-                const beta = 2 * h; // simplified convection for both sides
+                // Energy balance for cell:
+                // conduction_in + heat_generation - convection_out = 0
+                // (k*t/dx^2) * (sum(T_neighbors) - 4*T) + Q_density - 2*h*(T - T_amb) = 0
+                // T * (4*alpha + beta) = alpha * sum(T_neighbors) + Q_density + beta * T_amb
+                const newT = (alpha * (t_left + t_right + t_up + t_down) + Q[idx] + beta * ambientTemp) / denom;
 
-                const denom = alpha * (k_w + k_e + k_n + k_s) + beta;
-                const newT = (alpha * (k_w * t_w + k_e * t_e + k_n * t_n + k_s * t_s) + Q[idx] + beta * ambientTemp) / denom;
+                const diff = Math.abs(newT - T[idx]);
+                if (diff > maxDiff) maxDiff = diff;
 
                 T[idx] = newT;
-
-                const diff = Math.abs(T[idx] - T_old[idx]);
-                if (diff > maxDiff) maxDiff = diff;
             }
         }
 

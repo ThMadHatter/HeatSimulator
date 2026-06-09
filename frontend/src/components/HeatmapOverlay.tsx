@@ -6,40 +6,26 @@ import { computeHeatmap, applyColorMap } from '../thermal';
 interface HeatmapOverlayProps {
   width: number;
   height: number;
-  widthMm: number;
-  heightMm: number;
   onResult: (minT: number, maxT: number) => void;
 }
 
-const HeatmapOverlay: React.FC<HeatmapOverlayProps> = ({ width, height, widthMm, heightMm, onResult }) => {
+const HeatmapOverlay: React.FC<HeatmapOverlayProps> = ({ width, height, onResult }) => {
   const {
-    components, zones, heatmapOpacity, boundary,
-    ambientTemperature, globalMaxTemperature
+    heatmapOpacity, ambientTemperature, globalMaxTemperature, heatmapResult
   } = useStore();
 
   const [heatmapImg, setHeatmapImg] = useState<HTMLImageElement | null>(null);
 
   const { data, displayMinT, displayMaxT, nx, ny } = useMemo(() => {
-    if (width <= 0 || height <= 0 || components.length === 0) {
+    if (!heatmapResult || width <= 0 || height <= 0) {
         return { data: null, displayMinT: ambientTemperature, displayMaxT: ambientTemperature + 10, nx: 0, ny: 0 };
     }
 
-    const resolution = 150;
-    const result = computeHeatmap(
-        components,
-        zones,
-        widthMm,
-        heightMm,
-        boundary,
-        ambientTemperature,
-        resolution
-    );
+    const displayMaxT = globalMaxTemperature !== null ? globalMaxTemperature : heatmapResult.maxTemp;
+    const displayMinT = heatmapResult.minTemp;
 
-    const displayMaxT = globalMaxTemperature !== null ? globalMaxTemperature : result.maxTemp;
-    const displayMinT = result.minTemp;
-
-    return { data: result.data, displayMinT, displayMaxT, nx: result.width, ny: result.height };
-  }, [components, zones, widthMm, heightMm, boundary, ambientTemperature, globalMaxTemperature, width, height]);
+    return { data: heatmapResult.data, displayMinT, displayMaxT, nx: heatmapResult.width, ny: heatmapResult.height };
+  }, [heatmapResult, ambientTemperature, globalMaxTemperature, width, height]);
 
   useEffect(() => {
     if (!data || nx === 0 || ny === 0) {

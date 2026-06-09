@@ -5,32 +5,18 @@ import { computeHeatmap } from '../thermal';
 
 const PropertyPanel: React.FC = () => {
   const {
-    selectedComponentId, components, zones, updateComponent, removeComponent,
-    imageDimensions, calibration, boundary,
+    selectedComponentId, components, updateComponent, removeComponent,
     ambientTemperature, setAmbientTemperature,
-    globalMaxTemperature, setGlobalMaxTemperature
+    globalMaxTemperature, setGlobalMaxTemperature,
+    heatmapResult
   } = useStore();
 
   const selectedComp = components.find((c) => c.id === selectedComponentId);
 
   const junctionData = useMemo(() => {
-    if (!selectedComp || !imageDimensions || !calibration.mmPerPixel) return null;
-
-    const widthMm = imageDimensions.width * calibration.mmPerPixel;
-    const heightMm = imageDimensions.height * calibration.mmPerPixel;
-
-    const result = computeHeatmap(
-        components,
-        zones,
-        widthMm,
-        heightMm,
-        boundary,
-        ambientTemperature,
-        150
-    );
-
-    return result.junctions.find(j => j.compId === selectedComp.id);
-  }, [selectedComp, components, zones, imageDimensions, calibration, boundary, ambientTemperature]);
+    if (!selectedComp || !heatmapResult) return null;
+    return heatmapResult.junctions.find(j => j.compId === selectedComp.id);
+  }, [selectedComp, heatmapResult]);
 
   return (
     <div className="w-64 bg-gray-100 p-4 border-l border-gray-300 h-full overflow-y-auto">
@@ -161,19 +147,19 @@ const PropertyPanel: React.FC = () => {
                     </h3>
                     <div className="grid grid-cols-2 gap-x-2 gap-y-1 text-xs">
                         <span className="text-gray-500">Tpcb:</span>
-                        <span className="text-right font-mono">{junctionData.tpcb.toFixed(1)}°C</span>
+                        <span className="text-right font-mono">{junctionData.tPcb.toFixed(1)}°C</span>
 
                         <span className="text-gray-500">RθPCB:</span>
-                        <span className="text-right font-mono">{junctionData.rthPcb.toFixed(2)} K/W</span>
+                        <span className="text-right font-mono">{junctionData.rThetaPcb.toFixed(2)} K/W</span>
 
                         <span className="text-gray-500 font-bold">Tj:</span>
                         <span className={`text-right font-bold font-mono ${junctionData.isOverLimit ? 'text-red-600' : 'text-green-600'}`}>
-                            {junctionData.tj.toFixed(1)}°C
+                            {junctionData.tj?.toFixed(1) ?? 'N/A'}°C
                         </span>
 
                         <span className="text-gray-500 text-[10px]">Rating:</span>
-                        <span className={`text-right text-[10px] font-mono ${junctionData.ratingPercent > 90 ? 'text-red-600' : 'text-gray-700'}`}>
-                            {junctionData.ratingPercent.toFixed(1)}%
+                        <span className={`text-right text-[10px] font-mono ${junctionData.ratingPercent && junctionData.ratingPercent > 90 ? 'text-red-600' : 'text-gray-700'}`}>
+                            {junctionData.ratingPercent?.toFixed(1) ?? 'N/A'}%
                         </span>
                     </div>
                 </div>
