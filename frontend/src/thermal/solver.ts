@@ -10,7 +10,8 @@ export function solveSteadyState(
     boundary: Point[],
     ambientTemp: number,
     resolution: number = 150,
-    stackup?: Stackup
+    stackup?: Stackup,
+    debug: boolean = false
 ): HeatmapResult {
     // 0. Input Validation
     if (widthMm <= 0 || heightMm <= 0) throw new Error("Invalid board dimensions");
@@ -49,7 +50,6 @@ export function solveSteadyState(
     for (const zone of zones) {
         if (!zone.enabled || zone.points.length < 3) continue;
 
-        // Find bounding box of zone to optimize
         const minX = Math.min(...zone.points.map(p => p.x));
         const maxX = Math.max(...zone.points.map(p => p.x));
         const minY = Math.min(...zone.points.map(p => p.y));
@@ -72,6 +72,9 @@ export function solveSteadyState(
     }
 
     // 2. Initialize Heat Sources
+    let totalInjectedPower = 0;
+    const componentCells: Record<string, number> = {};
+
     for (const comp of components) {
         const area = comp.width * comp.height || 1;
         const powerPerM2 = comp.power / (area / 1000000);
@@ -81,11 +84,25 @@ export function solveSteadyState(
         const startY = Math.max(0, Math.floor((comp.y - comp.height / 2) / dx));
         const endY = Math.min(ny - 1, Math.floor((comp.y + comp.height / 2) / dx));
 
+        let cellsCount = 0;
         for (let j = startY; j <= endY; j++) {
             for (let i = startX; i <= endX; i++) {
                 Q[j * nx + i] += powerPerM2;
+                cellsCount++;
             }
         }
+
+        // Fallback to nearest cell if footprint is too small for resolution
+        if (cellsCount === 0) {
+            const i = Math.max(0, Math.min(nx - 1, Math.floor(comp.x / dx)));
+            const j = Math.max(0, Math.min(ny - 1, Math.floor(comp.y / dx)));
+            const cellAreaM2 = dxM * dxM;
+            Q[j * nx + i] += comp.power / cellAreaM2;
+            cellsCount = 1;
+        }
+
+        componentCells[comp.id] = cellsCount;
+        totalInjectedPower += comp.power;
     }
 
     // 3. Pre-calculate PCB mask
@@ -106,7 +123,6 @@ export function solveSteadyState(
     const tolerance = 0.001;
     let iterations = 0;
 
-    const invDx2 = 1 / (dxM * dxM);
     const beta = 2 * h; // Convection on both sides
 
     const harmonicMean = (a: number, b: number) => {
@@ -129,7 +145,6 @@ export function solveSteadyState(
 
                 const k = kGrid[idx];
 
-                // Harmonic means for interface conductivity
                 const kW = i > 0      ? harmonicMean(k, kGrid[idx - 1])  : k;
                 const kE = i < nx - 1 ? harmonicMean(k, kGrid[idx + 1])  : k;
                 const kN = j > 0      ? harmonicMean(k, kGrid[idx - nx]) : k;
@@ -140,13 +155,30 @@ export function solveSteadyState(
                 const tN = j > 0      ? T[idx - nx] : ambientTemp;
                 const tS = j < ny - 1 ? T[idx + nx] : ambientTemp;
 
-                // Energy balance:
-                // Sum( k_face * (T_neighbor - T) / dx * thickness * dx ) + Q * dx^2 * thickness - 2 * h * (T - T_amb) * dx^2 = 0
-                // Sum( k_face * (T_neighbor - T) * thickness ) + Q * dx^2 * thickness - 2 * h * (T - T_amb) * dx^2 = 0
-                // (kE*tE + kW*tW + kN*tN + kS*tS) * thickness + Q*dx^2*thickness + 2*h*T_amb*dx^2 = T * [(kE+kW+kN+kS)*thickness + 2*h*dx^2]
+                // Energy balance (steady state):
+                // Net Conduction + Generation - Convection = 0
+                // Conduction (W) = k * A * dT/dx
+                // Source (W) = Q_density (W/m^2) * area_cell (m^2)
+                // BUT our Q is W/m^2 (power per unit area of footprint).
+                // In a 2D PCB model (thickness t):
+                // Conduction term: sum over neighbors of [ k_interf * (T_neigh - T) / dx * (t * dx) ]
+                // Generation term: Q_density * dx * dx * t  <-- NO, Q is power per unit area of PCB.
+                // If Q is W/m^2 (footprint power / area), then Power = Q * dx * dx.
+                // Heat balance for a cell (Area = dx^2):
+                // Sum_neighbors [ k_interf * (T_neigh - T) / dx * (thickness * dx) ] + Q_density * dx * dx - 2 * h * (T - Tamb) * dx * dx = 0
+                // Divide by thickness:
+                // Sum_neighbors [ k_interf * (T_neigh - T) ] + (Q_density * dx * dx / thickness) - (2 * h / thickness) * (T - Tamb) * dx * dx = 0
+
+                // Let's re-derive to be sure:
+                // k * thickness * dx * (T_neigh - T) / dx  => k * thickness * (T_neigh - T)
+                // Sum over 4 neighbors: thickness * [ kE(tE-T) + kW(tW-T) + kN(tN-T) + kS(tS-T) ]
+                // + Q_density * dx * dx
+                // - 2 * h * dx * dx * (T - Tamb) = 0
+
+                // T * [ thickness * (kE + kW + kN + kS) + 2 * h * dx^2 ] = thickness * (kE*tE + kW*tW + kN*tN + kS*tS) + Q_density * dx^2 + 2 * h * dx^2 * Tamb
 
                 const termConduction = (kE * tE + kW * tW + kN * tN + kS * tS) * thicknessM;
-                const termGeneration = Q[idx] * dxM * dxM * thicknessM;
+                const termGeneration = Q[idx] * dxM * dxM;
                 const termConvection = beta * ambientTemp * dxM * dxM;
                 const denom = (kE + kW + kN + kS) * thicknessM + beta * dxM * dxM;
 
@@ -177,7 +209,16 @@ export function solveSteadyState(
                 count++;
             }
         }
-        const tPcb = count > 0 ? sumT / count : ambientTemp;
+
+        // Fallback for RθPCB if count is 0
+        if (count === 0) {
+            const i = Math.max(0, Math.min(nx - 1, Math.floor(comp.x / dx)));
+            const j = Math.max(0, Math.min(ny - 1, Math.floor(comp.y / dx)));
+            sumT = T[j * nx + i];
+            count = 1;
+        }
+
+        const tPcb = sumT / count;
         const rThetaPcb = comp.power > 0 ? (tPcb - ambientTemp) / comp.power : 0;
 
         let tj: number | null = null;
@@ -188,7 +229,7 @@ export function solveSteadyState(
         } else if (comp.thetaJA !== undefined && comp.thetaJA !== null) {
             tj = ambientTemp + comp.power * comp.thetaJA;
         } else {
-            warning = "Missing ThetaJC/ThetaJA";
+            warning = "Max temperature required";
         }
 
         let margin: number | null = null;
@@ -199,6 +240,10 @@ export function solveSteadyState(
             margin = comp.maxTemperature - tj;
             ratingPercent = (tj / comp.maxTemperature) * 100;
             isOverLimit = tj > comp.maxTemperature;
+        }
+
+        if (debug) {
+            console.log(`Comp ${comp.name}: P=${comp.power}W, Cells=${componentCells[comp.id]}, Tpcb=${tPcb.toFixed(2)}°C, RθPCB=${rThetaPcb.toFixed(4)} K/W`);
         }
 
         return {
@@ -219,6 +264,10 @@ export function solveSteadyState(
     }
 
     const junctionMax = junctions.reduce((max, j) => Math.max(max, j.tj || 0), ambientTemp);
+
+    if (debug) {
+        console.log(`Solver: nx=${nx}, ny=${ny}, dx=${dx.toFixed(4)}mm, totalPower=${totalInjectedPower}W, maxBoardT=${maxBoardT.toFixed(2)}°C, iterations=${iterations}`);
+    }
 
     return {
         data: T,

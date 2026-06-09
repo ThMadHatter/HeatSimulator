@@ -12,7 +12,7 @@ import { Zone } from '../thermal/types';
 const CanvasView: React.FC = () => {
   const {
     image, imageDimensions, mode, components, addComponent,
-    updateComponent, selectComponent, selectedComponentId,
+    updateComponent, selectComponent, selectedComponentId, removeComponent,
     calibration, setCalibrationPoint,
     boundary, addBoundaryPoint, updateBoundaryPoint, removeBoundaryPoint,
     insertBoundaryPoint, ambientTemperature, showGrid,
@@ -26,6 +26,8 @@ const CanvasView: React.FC = () => {
     y: 0,
   });
 
+  const [isSpacePressed, setIsSpacePressed] = useState(false);
+
   const [heatmapRange, setHeatmapRange] = useState({ min: 25, max: 35 });
   const handleHeatmapResult = useCallback((min: number, max: number) => {
     setHeatmapRange({ min, max });
@@ -35,6 +37,34 @@ const CanvasView: React.FC = () => {
   const [bgImage, setBgImage] = useState<HTMLImageElement | null>(null);
   const stageRef = useRef<any>(null);
   const [opacity, setOpacity] = useState(1);
+
+  // Keyboard handlers
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+        if (e.key === 'Escape') {
+            selectComponent(null);
+            selectZone(null);
+        }
+        if (e.key === 'Delete' || e.key === 'Backspace') {
+            if (selectedComponentId) removeComponent(selectedComponentId);
+            if (selectedZoneId) removeZone(selectedZoneId);
+        }
+        if (e.code === 'Space') {
+            setIsSpacePressed(true);
+        }
+    };
+    const handleKeyUp = (e: KeyboardEvent) => {
+        if (e.code === 'Space') {
+            setIsSpacePressed(false);
+        }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('keyup', handleKeyUp);
+    return () => {
+        window.removeEventListener('keydown', handleKeyDown);
+        window.removeEventListener('keyup', handleKeyUp);
+    };
+  }, [selectedComponentId, selectedZoneId, selectComponent, selectZone, removeComponent, removeZone]);
 
   // Animation for flashing red
   useEffect(() => {
@@ -238,11 +268,11 @@ const CanvasView: React.FC = () => {
         onClick={handleStageClick}
         onMouseMove={handleMouseMove}
         onDragEnd={handleDragEnd}
-        draggable={mode === 'select' && !selectedComponentId && !selectedZoneId}
+        draggable={isSpacePressed || (mode === 'select' && !selectedComponentId && !selectedZoneId)}
         ref={stageRef}
       >
         <Layer>
-          {bgImage && <KonvaImage image={bgImage} />}
+          {bgImage && <KonvaImage image={bgImage} listening={false} />}
 
           {calibration.mmPerPixel && imageDimensions && (
             <HeatmapOverlay
@@ -311,7 +341,7 @@ const CanvasView: React.FC = () => {
                             stroke="white"
                             strokeWidth={1 / stage.scale}
                             draggable
-                            onDragMove={(e) => {
+                            onDragEnd={(e) => {
                                 if (calibration.mmPerPixel) {
                                     const newPoints = [...zone.points];
                                     newPoints[i] = {
@@ -323,10 +353,22 @@ const CanvasView: React.FC = () => {
                             }}
                             onClick={(e) => {
                                 e.cancelBubble = true;
-                                if (e.evt.altKey || e.evt.shiftKey) {
+                                if (e.evt.altKey) {
+                                    if (zone.points.length <= 3) {
+                                        alert("Zone must have at least 3 vertices.");
+                                        return;
+                                    }
                                     const newPoints = zone.points.filter((_, idx) => idx !== i);
                                     updateZone(zone.id, { points: newPoints });
                                 }
+                            }}
+                            onMouseEnter={(e) => {
+                                const container = e.target.getStage()?.container();
+                                if (container) container.style.cursor = 'move';
+                            }}
+                            onMouseLeave={(e) => {
+                                const container = e.target.getStage()?.container();
+                                if (container) container.style.cursor = 'crosshair';
                             }}
                         />
                     ))}
@@ -393,7 +435,7 @@ const CanvasView: React.FC = () => {
                         stroke="white"
                         strokeWidth={1 / stage.scale}
                         draggable
-                        onDragMove={(e) => {
+                        onDragEnd={(e) => {
                             if (calibration.mmPerPixel) {
                                 updateBoundaryPoint(i, {
                                     x: e.target.x() * calibration.mmPerPixel,
@@ -403,7 +445,7 @@ const CanvasView: React.FC = () => {
                         }}
                         onClick={(e) => {
                             e.cancelBubble = true;
-                            if (e.evt.altKey || e.evt.shiftKey) {
+                            if (e.evt.altKey) {
                                 removeBoundaryPoint(i);
                             }
                         }}
@@ -473,7 +515,7 @@ const CanvasView: React.FC = () => {
                 else if (junction.ratingPercent && junction.ratingPercent > 70) statusColor = "#f59e0b"; // yellow/orange
             }
 
-            const label = `${comp.name}\nTj: ${junction?.tj?.toFixed(1) ?? 'N/A'}°C\nTpcb: ${junction?.tPcb.toFixed(1)}°C\nRp: ${junction?.rThetaPcb.toFixed(2)}°C/W`;
+            const label = `${comp.name}\nTj: ${junction?.tj?.toFixed(1) ?? 'N/A'}°C\nTpcb: ${junction?.tPcb.toFixed(1)}°C\nRp: ${junction?.rThetaPcb.toFixed(2)} K/W`;
 
             return (
               <Group
@@ -600,6 +642,17 @@ const CanvasView: React.FC = () => {
           Click boundary line to insert point. Alt+Click vertex to remove.
         </div>
       )}
+
+      <div className="absolute top-4 left-20 bg-gray-900/80 text-white p-3 rounded-lg text-[10px] font-mono border border-white/10 backdrop-blur-sm pointer-events-none">
+          <div className="font-bold text-blue-400 border-b border-white/10 mb-1 pb-1">SHORTCUTS</div>
+          <div className="grid grid-cols-[80px_1fr] gap-y-1">
+              <span className="text-gray-400">Wheel:</span> <span>Zoom</span>
+              <span className="text-gray-400">Space+Drag:</span> <span>Pan</span>
+              <span className="text-gray-400">Esc:</span> <span>Cancel/Deselect</span>
+              <span className="text-gray-400">Delete:</span> <span>Remove Selected</span>
+              <span className="text-gray-400">Alt+Click:</span> <span>Remove Vertex</span>
+          </div>
+      </div>
 
       <DebugPanel />
     </div>

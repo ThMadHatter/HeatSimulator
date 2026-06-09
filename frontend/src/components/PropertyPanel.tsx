@@ -269,18 +269,38 @@ const PropertyPanel: React.FC = () => {
                         <span className="text-right font-mono">{junctionData.tPcb.toFixed(1)}°C</span>
 
                         <span className="text-gray-500">RθPCB:</span>
-                        <span className="text-right font-mono">{junctionData.rThetaPcb.toFixed(2)} K/W</span>
+                        <span className="text-right font-mono">{selectedComp.power > 0 ? junctionData.rThetaPcb.toFixed(2) + ' K/W' : 'N/A'}</span>
 
                         <span className="text-gray-500 font-bold">Tj:</span>
                         <span className={`text-right font-bold font-mono ${junctionData.isOverLimit ? 'text-red-600' : 'text-green-600'}`}>
                             {junctionData.tj?.toFixed(1) ?? 'N/A'}°C
                         </span>
 
-                        <span className="text-gray-500 text-[10px]">Rating:</span>
-                        <span className={`text-right text-[10px] font-mono ${junctionData.ratingPercent && junctionData.ratingPercent > 90 ? 'text-red-600' : 'text-gray-700'}`}>
-                            {junctionData.ratingPercent?.toFixed(1) ?? 'N/A'}%
+                        <span className="text-gray-500">Thermal utilization:</span>
+                        <span className={`text-right font-bold font-mono ${
+                            !junctionData.ratingPercent ? 'text-gray-400' :
+                            junctionData.ratingPercent > 100 ? 'text-red-600 animate-pulse' :
+                            junctionData.ratingPercent > 90 ? 'text-red-600' :
+                            junctionData.ratingPercent > 70 ? 'text-orange-500' :
+                            'text-green-600'
+                        }`}>
+                            {junctionData.ratingPercent ? junctionData.ratingPercent.toFixed(1) + '%' : 'N/A'}
                         </span>
+
+                        {selectedComp.maxTemperature && junctionData.tj && (
+                            <>
+                                <span className="text-gray-500 text-[10px]">Margin:</span>
+                                <span className={`text-right text-[10px] font-mono ${junctionData.isOverLimit ? 'text-red-600' : 'text-gray-700'}`}>
+                                    {(selectedComp.maxTemperature - junctionData.tj).toFixed(1)}°C ({((selectedComp.maxTemperature - junctionData.tj)/selectedComp.maxTemperature*100).toFixed(1)}%)
+                                </span>
+                            </>
+                        )}
                     </div>
+                    {junctionData.warning && (
+                        <div className="text-[10px] text-orange-600 bg-orange-50 p-1 rounded border border-orange-100 mt-1">
+                            ⚠️ {junctionData.warning}
+                        </div>
+                    )}
                 </div>
             )}
 

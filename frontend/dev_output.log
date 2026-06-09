@@ -3,7 +3,9 @@
 > vite
 
 
-  VITE v3.2.11  ready in 526 ms
+  VITE v3.2.11  ready in 486 ms
 
   ➜  Local:   http://localhost:5173/
   ➜  Network: use --host to expose
+12:51:08 PM [vite] hmr update /src/components/PropertyPanel.tsx
+hmr update /src/style.css

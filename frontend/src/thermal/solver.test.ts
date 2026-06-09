@@ -70,6 +70,7 @@ describe('solveSteadyState', () => {
         const junction = result.junctions[0];
 
         expect(junction.rThetaPcb).toBeGreaterThan(0);
+        expect(junction.tPcb).toBeGreaterThan(ambientTemp);
         expect(junction.tPcb).toBeCloseTo(ambientTemp + power * junction.rThetaPcb, 5);
     });
 
@@ -78,7 +79,6 @@ describe('solveSteadyState', () => {
             id: 'c1', name: 'U1', x: 50, y: 50, width: 10, height: 10, power: 1.0
         }];
         const result = solveSteadyState(components, [], 100, 100, boundary, ambientTemp, 50);
-        // Previously k=25, thickness=1.6mm. In new solver it's default 25 if no stackup.
         expect(result.kGrid.every(k => k === 25)).toBe(true);
     });
 
@@ -129,5 +129,21 @@ describe('solveSteadyState', () => {
     it('kGrid dimensions match thermal grid', () => {
         const result = solveSteadyState([], [], 100, 100, boundary, ambientTemp, 50);
         expect(result.kGrid.length).toBe(result.data.length);
+    });
+
+    it('component with power > 0 produces max temperature > ambient', () => {
+        const components: Component[] = [{
+            id: 'c1', name: 'U1', x: 50, y: 50, width: 10, height: 10, power: 1.0
+        }];
+        const result = solveSteadyState(components, [], 100, 100, boundary, ambientTemp, 50);
+        expect(result.maxTemp).toBeGreaterThan(ambientTemp);
+    });
+
+    it('increasing power increases max temperature', () => {
+        const c1: Component = { id: 'c1', name: 'U1', x: 50, y: 50, width: 10, height: 10, power: 1.0 };
+        const c2: Component = { ...c1, power: 2.0 };
+        const r1 = solveSteadyState([c1], [], 100, 100, boundary, ambientTemp, 50);
+        const r2 = solveSteadyState([c2], [], 100, 100, boundary, ambientTemp, 50);
+        expect(r2.maxTemp).toBeGreaterThan(r1.maxTemp);
     });
 });

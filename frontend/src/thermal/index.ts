@@ -16,7 +16,8 @@ export const computeHeatmap = (
     boundary: Point[],
     ambientTemp: number,
     resolution: number = 150,
-    stackup?: Stackup
+    stackup?: Stackup,
+    debug: boolean = false
 ): HeatmapResult => {
-    return solveSteadyState(components, zones, widthMm, heightMm, boundary, ambientTemp, resolution, stackup);
+    return solveSteadyState(components, zones, widthMm, heightMm, boundary, ambientTemp, resolution, stackup, debug);
 };
