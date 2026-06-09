@@ -6,8 +6,6 @@ cv.onRuntimeInitialized = () => {
 };
 
 export function isOpenCVReady(): boolean {
-  // If it's already defined and not a promise, it might be ready
-  // techstark version usually has a way to check
   return cvReady || (typeof cv.Mat !== 'undefined');
 }
 
@@ -44,7 +42,6 @@ export async function detectPCBOutline(
       cv.GaussianBlur(gray, blurred, ksize, 0, 0, cv.BORDER_DEFAULT);
 
       // 4. Canny edge detection
-      // We use Otsu's method or just sensible defaults for PCB images
       cv.Canny(blurred, edges, 50, 150, 3, false);
 
       // 5. Find contours
@@ -88,6 +85,8 @@ export async function detectPCBOutline(
       // Cleanup
       src.delete(); gray.delete(); blurred.delete(); edges.delete();
       contours.delete(); hierarchy.delete(); simplified.delete();
+      // Important: delete the Mat retrieved from contours.get()
+      largestContour.delete();
 
       resolve(points);
     } catch (err) {

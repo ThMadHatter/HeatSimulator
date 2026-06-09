@@ -14,7 +14,7 @@ const CanvasView: React.FC = () => {
     updateComponent, selectComponent, selectedComponentId,
     calibration, setCalibrationPoint,
     boundary, addBoundaryPoint, updateBoundaryPoint, removeBoundaryPoint,
-    insertBoundaryPoint, ambientTemperature
+    insertBoundaryPoint, ambientTemperature, showGrid
   } = useStore();
 
   const [stage, setStage] = useState({
@@ -80,10 +80,11 @@ const CanvasView: React.FC = () => {
         mmY = pointer.y * calibration.mmPerPixel;
 
         if (heatmapResult && imageDimensions) {
-            const gridX = Math.floor((mmX / (imageDimensions.width * calibration.mmPerPixel)) * 150);
-            const gridY = Math.floor((mmY / (imageDimensions.height * calibration.mmPerPixel)) * 150);
-            if (gridX >= 0 && gridX < 150 && gridY >= 0 && gridY < 150) {
-                temp = heatmapResult.data[gridY * 150 + gridX];
+            const dx = Math.max(imageDimensions.width * calibration.mmPerPixel, imageDimensions.height * calibration.mmPerPixel) / 150;
+            const gridX = Math.floor(mmX / dx);
+            const gridY = Math.floor(mmY / dx);
+            if (gridX >= 0 && gridX < heatmapResult.width && gridY >= 0 && gridY < heatmapResult.height) {
+                temp = heatmapResult.data[gridY * heatmapResult.width + gridX];
             }
         }
     }
@@ -313,6 +314,36 @@ const CanvasView: React.FC = () => {
               strokeWidth={2 / stage.scale}
             />
           )}
+
+          {/* Grid Debug */}
+          {showGrid && heatmapResult && imageDimensions && calibration.mmPerPixel && (() => {
+              const dx = Math.max(imageDimensions.width * calibration.mmPerPixel, imageDimensions.height * calibration.mmPerPixel) / 150;
+              const gridLines = [];
+              const nx = heatmapResult.width;
+              const ny = heatmapResult.height;
+
+              for (let i = 0; i <= nx; i++) {
+                  gridLines.push(
+                      <Line
+                          key={`v-${i}`}
+                          points={[mmToPx(i * dx), 0, mmToPx(i * dx), mmToPx(ny * dx)]}
+                          stroke="rgba(255,255,255,0.2)"
+                          strokeWidth={1 / stage.scale}
+                      />
+                  );
+              }
+              for (let j = 0; j <= ny; j++) {
+                  gridLines.push(
+                      <Line
+                          key={`h-${j}`}
+                          points={[0, mmToPx(j * dx), mmToPx(nx * dx), mmToPx(j * dx)]}
+                          stroke="rgba(255,255,255,0.2)"
+                          strokeWidth={1 / stage.scale}
+                      />
+                  );
+              }
+              return gridLines;
+          })()}
 
           {/* Components */}
           {components.map((comp) => {

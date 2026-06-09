@@ -35,6 +35,7 @@ interface State {
   mode: InteractionMode;
   selectedComponentId: string | null;
   heatmapOpacity: number;
+  showGrid: boolean;
 
   // Actions
   setImage: (image: string | null, width?: number, height?: number) => void;
@@ -60,6 +61,7 @@ interface State {
   setGlobalMaxTemperature: (temp: number | null) => void;
 
   setHeatmapOpacity: (opacity: number) => void;
+  setShowGrid: (showGrid: boolean) => void;
 }
 
 export const useStore = create<State>((set) => ({
@@ -80,6 +82,7 @@ export const useStore = create<State>((set) => ({
   mode: 'select',
   selectedComponentId: null,
   heatmapOpacity: 0.6,
+  showGrid: false,
 
   setImage: (image, width, height) => set({
     image,
@@ -143,4 +146,5 @@ export const useStore = create<State>((set) => ({
   setGlobalMaxTemperature: (globalMaxTemperature) => set({ globalMaxTemperature }),
 
   setHeatmapOpacity: (heatmapOpacity) => set({ heatmapOpacity }),
+  setShowGrid: (showGrid: boolean) => set({ showGrid }),
 }));

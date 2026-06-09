@@ -19,9 +19,9 @@ const HeatmapOverlay: React.FC<HeatmapOverlayProps> = ({ width, height, widthMm,
 
   const [heatmapImg, setHeatmapImg] = useState<HTMLImageElement | null>(null);
 
-  const { data, displayMinT, displayMaxT } = useMemo(() => {
+  const { data, displayMinT, displayMaxT, nx, ny } = useMemo(() => {
     if (width <= 0 || height <= 0 || components.length === 0) {
-        return { data: null, displayMinT: ambientTemperature, displayMaxT: ambientTemperature + 10 };
+        return { data: null, displayMinT: ambientTemperature, displayMaxT: ambientTemperature + 10, nx: 0, ny: 0 };
     }
 
     const resolution = 150;
@@ -37,24 +37,23 @@ const HeatmapOverlay: React.FC<HeatmapOverlayProps> = ({ width, height, widthMm,
     const displayMaxT = globalMaxTemperature !== null ? globalMaxTemperature : result.maxTemp;
     const displayMinT = result.minTemp;
 
-    return { data: result.data, displayMinT, displayMaxT };
+    return { data: result.data, displayMinT, displayMaxT, nx: result.width, ny: result.height };
   }, [components, widthMm, heightMm, boundary, ambientTemperature, globalMaxTemperature, width, height]);
 
   useEffect(() => {
-    if (!data) {
+    if (!data || nx === 0 || ny === 0) {
         setHeatmapImg(null);
         onResult(ambientTemperature, ambientTemperature + 10);
         return;
     }
 
-    const resolution = 150;
     const canvas = document.createElement('canvas');
-    canvas.width = resolution;
-    canvas.height = resolution;
+    canvas.width = nx;
+    canvas.height = ny;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    const imageData = ctx.createImageData(resolution, resolution);
+    const imageData = ctx.createImageData(nx, ny);
     for (let i = 0; i < data.length; i++) {
         const temp = data[i];
         const [r, g, b] = applyColorMap(temp, displayMinT, displayMaxT);
@@ -71,7 +70,7 @@ const HeatmapOverlay: React.FC<HeatmapOverlayProps> = ({ width, height, widthMm,
         onResult(displayMinT, displayMaxT);
     };
     image.src = canvas.toDataURL();
-  }, [data, displayMinT, displayMaxT, ambientTemperature, onResult]);
+  }, [data, displayMinT, displayMaxT, ambientTemperature, onResult, nx, ny]);
 
   if (!heatmapImg) return null;
 
