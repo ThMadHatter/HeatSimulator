@@ -60,6 +60,7 @@ export function solveSteadyState(
     // 3. Gauss-Seidel Solver
     const maxIterations = 1000;
     const tolerance = 0.001;
+    let iterations = 0;
 
     const thicknessM = 0.0016;
     const alpha = (k * thicknessM) / (dxM * dxM);
@@ -67,6 +68,7 @@ export function solveSteadyState(
     const denom = 4 * alpha + beta;
 
     for (let iter = 0; iter < maxIterations; iter++) {
+        iterations = iter + 1;
         let maxDiff = 0;
         T_old.set(T);
 
@@ -96,16 +98,55 @@ export function solveSteadyState(
         if (maxDiff < tolerance) break;
     }
 
-    // 4. Compute Junctions & Max Temp
+    // 4. Compute Engineering Metrics
     const junctions: JunctionData[] = components.map(comp => {
-        const tj = ambientTemp + (comp.power * (comp.thetaJA || 0));
-        const maxT = comp.maxTemperature || 125;
+        // Find grid cells inside component footprint
+        const startX = Math.max(0, Math.floor((comp.x - comp.width / 2) / dx));
+        const endX = Math.min(nx - 1, Math.floor((comp.x + comp.width / 2) / dx));
+        const startY = Math.max(0, Math.floor((comp.y - comp.height / 2) / dx));
+        const endY = Math.min(ny - 1, Math.floor((comp.y + comp.height / 2) / dx));
+
+        let sumT = 0;
+        let count = 0;
+        for (let j = startY; j <= endY; j++) {
+            for (let i = startX; i <= endX; i++) {
+                sumT += T[j * nx + i];
+                count++;
+            }
+        }
+        const tPcb = count > 0 ? sumT / count : ambientTemp;
+        const rThetaPcb = comp.power > 0 ? (tPcb - ambientTemp) / comp.power : 0;
+
+        let tj: number | null = null;
+        let warning: string | undefined;
+
+        if (comp.thetaJC !== undefined && comp.thetaJC !== null) {
+            tj = tPcb + comp.power * comp.thetaJC;
+        } else if (comp.thetaJA !== undefined && comp.thetaJA !== null) {
+            tj = ambientTemp + comp.power * comp.thetaJA;
+        } else {
+            warning = "Missing ThetaJC/ThetaJA";
+        }
+
+        let margin: number | null = null;
+        let ratingPercent: number | null = null;
+        let isOverLimit = false;
+
+        if (tj !== null && comp.maxTemperature) {
+            margin = comp.maxTemperature - tj;
+            ratingPercent = (tj / comp.maxTemperature) * 100;
+            isOverLimit = tj > comp.maxTemperature;
+        }
+
         return {
             compId: comp.id,
             tj,
-            margin: maxT - tj,
-            ratingPercent: (tj / maxT) * 100,
-            isOverLimit: tj > maxT
+            tPcb,
+            rThetaPcb,
+            margin,
+            ratingPercent,
+            isOverLimit,
+            warning
         };
     });
 
@@ -114,7 +155,7 @@ export function solveSteadyState(
         if (T[i] > maxBoardT) maxBoardT = T[i];
     }
 
-    const junctionMax = junctions.reduce((max, j) => Math.max(max, j.tj), ambientTemp);
+    const junctionMax = junctions.reduce((max, j) => Math.max(max, j.tj || 0), ambientTemp);
 
     return {
         data: T,
@@ -122,6 +163,7 @@ export function solveSteadyState(
         height: ny,
         minTemp: ambientTemp,
         maxTemp: Math.max(maxBoardT, junctionMax),
-        junctions
+        junctions,
+        iterations
     };
 }

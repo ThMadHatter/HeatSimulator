@@ -19,8 +19,9 @@ const DebugPanel: React.FC = () => {
     let hottestComp = null;
     let maxTj = -1;
     for (const j of result.junctions) {
-        if (j.tj > maxTj) {
-            maxTj = j.tj;
+        const currentTj = j.tj ?? j.tPcb; // Use Tpcb if Tj is not available
+        if (currentTj > maxTj) {
+            maxTj = currentTj;
             hottestComp = components.find(c => c.id === j.compId);
         }
     }
@@ -28,9 +29,11 @@ const DebugPanel: React.FC = () => {
     return {
       maxTemp: result.maxTemp.toFixed(1),
       hottestCompName: hottestComp ? hottestComp.name : 'N/A',
+      hottestCompId: hottestComp ? hottestComp.id : 'N/A',
       numComponents: components.length,
       gridSize: `${result.width}x${result.height}`,
       boundaryPoints: boundary.length,
+      iterations: result.iterations
     };
   }, [components, imageDimensions, calibration, boundary, ambientTemperature]);
 
@@ -40,11 +43,13 @@ const DebugPanel: React.FC = () => {
     <div className="absolute top-4 right-4 bg-black/70 text-white p-3 rounded-lg text-xs font-mono backdrop-blur-sm border border-white/20 pointer-events-auto">
       <div className="font-bold border-b border-white/20 mb-2 pb-1 text-blue-400 uppercase">Thermal Engine v2</div>
       <div className="grid grid-cols-2 gap-x-4 gap-y-1">
-        <span>Max Board T:</span> <span className="text-right">{debugInfo.maxTemp} °C</span>
-        <span>Hottest Tj:</span> <span className="text-right text-red-400">{debugInfo.hottestCompName}</span>
+        <span>Global Max T:</span> <span className="text-right">{debugInfo.maxTemp} °C</span>
+        <span>Hottest Comp:</span> <span className="text-right text-red-400">{debugInfo.hottestCompName}</span>
+        <span className="text-[10px] text-gray-400">ID:</span> <span className="text-right text-[10px] text-gray-400">{debugInfo.hottestCompId}</span>
         <span>Components:</span> <span className="text-right">{debugInfo.numComponents}</span>
         <span>Boundary:</span> <span className="text-right">{debugInfo.boundaryPoints} pts</span>
         <span>Grid:</span> <span className="text-right">{debugInfo.gridSize}</span>
+        <span>Iterations:</span> <span className="text-right">{debugInfo.iterations}</span>
       </div>
       <div className="mt-2 pt-2 border-t border-white/20">
         <label className="flex items-center gap-2 cursor-pointer">

@@ -7,10 +7,13 @@ export interface Point {
 
 export interface JunctionData {
     compId: string;
-    tj: number;
-    margin: number;
-    ratingPercent: number;
+    tj: number | null;
+    tPcb: number;
+    rThetaPcb: number;
+    margin: number | null;
+    ratingPercent: number | null;
     isOverLimit: boolean;
+    warning?: string;
 }
 
 export interface HeatmapResult {
@@ -20,4 +23,5 @@ export interface HeatmapResult {
     minTemp: number;
     maxTemp: number;
     junctions: JunctionData[];
+    iterations: number;
 }
