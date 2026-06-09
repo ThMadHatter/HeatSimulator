@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { Zone, HeatmapResult, Stackup } from '../thermal/types';
+import { Zone, HeatmapResult, Stackup, PolygonType } from '../thermal/types';
 
 export interface Component {
   id: string;
@@ -33,10 +33,8 @@ export type InteractionMode =
 
 export type Selection =
   | { type: 'component'; id: string }
-  | { type: 'pcb-boundary' }
-  | { type: 'pcb-boundary-vertex'; index: number }
-  | { type: 'conductivity-zone'; id: string }
-  | { type: 'conductivity-zone-vertex'; zoneId: string; index: number }
+  | { type: 'polygon'; shapeType: PolygonType; id: string }
+  | { type: 'polygonVertex'; shapeType: PolygonType; id: string; vertexIndex: number }
   | null;
 
 interface State {
@@ -46,14 +44,13 @@ interface State {
   zones: Zone[];
   stackup: Stackup;
   calibration: Calibration;
-  boundary: { x: number; y: number }[]; // in mm
   ambientTemperature: number; // °C
   globalMaxTemperature: number | null; // °C
 
   mode: InteractionMode;
   selection: Selection;
 
-  // Legacy fields for backward compatibility if needed, but we should phase them out
+  // Backward compatibility
   selectedComponentId: string | null;
   selectedZoneId: string | null;
 
@@ -83,13 +80,6 @@ interface State {
   setCalibrationDistance: (distance: number) => void;
   resetCalibration: () => void;
 
-  setBoundary: (boundary: { x: number; y: number }[]) => void;
-  addBoundaryPoint: (point: { x: number; y: number }) => void;
-  insertBoundaryPoint: (index: number, point: { x: number; y: number }) => void;
-  updateBoundaryPoint: (index: number, point: { x: number; y: number }) => void;
-  removeBoundaryPoint: (index: number) => void;
-  clearBoundary: () => void;
-
   setAmbientTemperature: (temp: number) => void;
   setGlobalMaxTemperature: (temp: number | null) => void;
 
@@ -100,7 +90,7 @@ interface State {
   setDebugPointerEvents: (enabled: boolean) => void;
 }
 
-export const useStore = create<State>((set) => ({
+export const useStore = create<State>((set, get) => ({
   image: null,
   imageDimensions: null,
   components: [],
@@ -117,7 +107,6 @@ export const useStore = create<State>((set) => ({
     distanceMm: 0,
     mmPerPixel: null,
   },
-  boundary: [],
   ambientTemperature: 25,
   globalMaxTemperature: null,
 
@@ -137,7 +126,6 @@ export const useStore = create<State>((set) => ({
     imageDimensions: width && height ? { width, height } : null,
     components: [],
     zones: [],
-    boundary: [],
     selection: null,
     selectedComponentId: null,
     selectedZoneId: null,
@@ -148,9 +136,8 @@ export const useStore = create<State>((set) => ({
     let selectedComponentId = null;
     let selectedZoneId = null;
     if (selection?.type === 'component') selectedComponentId = selection.id;
-    if (selection?.type === 'conductivity-zone') selectedZoneId = selection.id;
-    // For vertex selections, we also consider the parent selected for backward compat in PropertyPanel
-    if (selection?.type === 'conductivity-zone-vertex') selectedZoneId = selection.zoneId;
+    if (selection?.type === 'polygon') selectedZoneId = selection.id;
+    if (selection?.type === 'polygonVertex') selectedZoneId = selection.id;
 
     return { selection, selectedComponentId, selectedZoneId };
   }),
@@ -172,7 +159,7 @@ export const useStore = create<State>((set) => ({
   })),
   removeZone: (id) => set((state) => ({
     zones: state.zones.filter((z) => z.id !== id),
-    selection: (state.selection?.type === 'conductivity-zone' && state.selection.id === id) ? null : state.selection,
+    selection: (state.selection?.id === id) ? null : state.selection,
     selectedZoneId: state.selectedZoneId === id ? null : state.selectedZoneId,
   })),
 
@@ -201,21 +188,6 @@ export const useStore = create<State>((set) => ({
     return { calibration: { ...state.calibration, distanceMm: distance, mmPerPixel } };
   }),
   resetCalibration: () => set({ calibration: { point1: null, point2: null, distanceMm: 0, mmPerPixel: null } }),
-
-  setBoundary: (boundary) => set({ boundary }),
-  addBoundaryPoint: (point) => set((state) => ({ boundary: [...state.boundary, point] })),
-  insertBoundaryPoint: (index, point) => set((state) => {
-    const newBoundary = [...state.boundary];
-    newBoundary.splice(index, 0, point);
-    return { boundary: newBoundary };
-  }),
-  updateBoundaryPoint: (index, point) => set((state) => ({
-    boundary: state.boundary.map((p, i) => (i === index ? point : p)),
-  })),
-  removeBoundaryPoint: (index) => set((state) => ({
-    boundary: state.boundary.filter((_, i) => i !== index),
-  })),
-  clearBoundary: () => set({ boundary: [] }),
 
   setAmbientTemperature: (ambientTemperature) => set({ ambientTemperature }),
   setGlobalMaxTemperature: (globalMaxTemperature) => set({ globalMaxTemperature }),

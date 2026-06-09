@@ -48,7 +48,6 @@ describe('solveSteadyState', () => {
         const components: Component[] = [{
             id: 'c1', name: 'U1', x: 50, y: 50, width: 10, height: 10, power: 1.0
         }];
-        // L-shaped board or just a small square in a larger grid
         const smallBoundary: Point[] = [
             { x: 10, y: 10 },
             { x: 40, y: 10 },
@@ -57,7 +56,6 @@ describe('solveSteadyState', () => {
         ];
         const result = solveSteadyState(components, [], 100, 100, smallBoundary, ambientTemp, 50);
 
-        // (0,0) is outside the boundary
         expect(result.data[0]).toBe(ambientTemp);
     });
 
@@ -89,12 +87,12 @@ describe('solveSteadyState', () => {
         const resultNormal = solveSteadyState(components, [], 100, 100, boundary, ambientTemp, 50);
 
         const highKZone: Zone = {
-            id: 'z1', label: 'High K', enabled: true, conductivity: 400, // Copper-like
-            points: [ {x:0, y:0}, {x:100, y:0}, {x:100, y:100}, {x:0, y:100} ]
+            id: 'z1', type: 'conductivityZone', label: 'High K', enabled: true, conductivity: 400,
+            points: [ {x:0, y:0}, {x:100, y:0}, {x:100, y:100}, {x:0, y:100} ],
+            editable: true, selectable: true, deletable: true
         };
         const resultHighK = solveSteadyState(components, [highKZone], 100, 100, boundary, ambientTemp, 50);
 
-        // Max temp should be lower because heat is spread better
         expect(resultHighK.maxTemp).toBeLessThan(resultNormal.maxTemp);
     });
 
@@ -103,27 +101,26 @@ describe('solveSteadyState', () => {
             id: 'c1', name: 'U1', x: 50, y: 50, width: 10, height: 10, power: 2.0
         }];
 
-        // A "ring" of low conductivity around the component
         const lowKZone: Zone = {
-            id: 'z1', label: 'Low K', enabled: true, conductivity: 0.1,
-            points: [ {x:40, y:40}, {x:60, y:40}, {x:60, y:60}, {x:40, y:60} ]
+            id: 'z1', type: 'conductivityZone', label: 'Low K', enabled: true, conductivity: 0.1,
+            points: [ {x:40, y:40}, {x:60, y:40}, {x:60, y:60}, {x:40, y:60} ],
+            editable: true, selectable: true, deletable: true
         };
 
         const resultLowK = solveSteadyState(components, [lowKZone], 100, 100, boundary, ambientTemp, 50);
         const resultNormal = solveSteadyState(components, [], 100, 100, boundary, ambientTemp, 50);
 
-        // Max temp should be higher because heat is trapped inside the low-k zone
         expect(resultLowK.maxTemp).toBeGreaterThan(resultNormal.maxTemp);
     });
 
     it('stackup estimator returns reasonable values', () => {
         const s1: Stackup = { boardThicknessMm: 1.6, layerCount: 2, copperOzPerLayer: 1, estimatedCopperCoveragePercent: 100 };
         const k1 = estimateBaseConductivity(s1);
-        expect(k1).toBeGreaterThan(10); // Should be significantly higher than FR4
+        expect(k1).toBeGreaterThan(10);
 
         const s2: Stackup = { boardThicknessMm: 1.6, layerCount: 0, copperOzPerLayer: 0, estimatedCopperCoveragePercent: 0 };
         const k2 = estimateBaseConductivity(s2);
-        expect(k2).toBeCloseTo(0.35, 1); // Should be close to FR4
+        expect(k2).toBeCloseTo(0.35, 1);
     });
 
     it('kGrid dimensions match thermal grid', () => {

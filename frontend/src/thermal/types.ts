@@ -16,12 +16,18 @@ export interface JunctionData {
     warning?: string;
 }
 
+export type PolygonType = "pcbBoundary" | "conductivityZone" | "materialZone" | "keepoutZone";
+
 export interface Zone {
     id: string;
+    type: PolygonType;
     label: string;
     points: Point[];
-    conductivity: number; // W/mK
+    conductivity?: number; // W/mK - specific to conductivityZone
     enabled: boolean;
+    editable: boolean;
+    selectable: boolean;
+    deletable: boolean;
 }
 
 export interface Stackup {

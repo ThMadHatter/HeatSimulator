@@ -19,8 +19,9 @@ const PropertyPanel: React.FC = () => {
   }, [selection, components]);
 
   const selectedZone = useMemo(() => {
-    if (selection?.type === 'conductivity-zone') return zones.find(z => z.id === selection.id);
-    if (selection?.type === 'conductivity-zone-vertex') return zones.find(z => z.id === selection.zoneId);
+    if (selection?.type === 'polygon' || selection?.type === 'polygonVertex') {
+      return zones.find(z => z.id === selection.id);
+    }
     return null;
   }, [selection, zones]);
 
@@ -118,16 +119,16 @@ const PropertyPanel: React.FC = () => {
             Conductivity Zones
         </h2>
         <div className="space-y-2">
-            {zones.length === 0 ? (
+            {zones.filter(z => z.type === 'conductivityZone').length === 0 ? (
                 <p className="text-gray-500 italic text-xs">No zones defined. Use the toolbar to draw zones.</p>
             ) : (
-                zones.map(zone => {
-                    const isSelected = (selection?.type === 'conductivity-zone' && selection.id === zone.id) || (selection?.type === 'conductivity-zone-vertex' && selection.zoneId === zone.id);
+                zones.filter(z => z.type === 'conductivityZone').map(zone => {
+                    const isSelected = (selection?.type === 'polygon' || selection?.type === 'polygonVertex') && selection.id === zone.id;
                     return (
                     <div
                         key={zone.id}
                         className={`p-2 rounded border cursor-pointer transition-colors ${isSelected ? 'bg-blue-50 border-blue-300' : 'bg-white border-gray-200 hover:border-gray-300'}`}
-                        onClick={() => setSelection({ type: 'conductivity-zone', id: zone.id })}
+                        onClick={() => setSelection({ type: 'polygon', shapeType: zone.type, id: zone.id })}
                     >
                         <div className="flex justify-between items-center mb-1">
                             <span className="text-xs font-bold truncate flex-1">{zone.label}</span>
@@ -151,7 +152,7 @@ const PropertyPanel: React.FC = () => {
                 );})
             )}
 
-            {selectedZone && (
+            {selectedZone && selectedZone.type === 'conductivityZone' && (
                 <div className="mt-4 p-3 bg-gray-50 rounded border border-gray-200 space-y-3">
                     <div className="text-[10px] font-bold text-gray-500 uppercase">Edit Zone</div>
                     <div>

@@ -5,18 +5,15 @@ import { SelectImage, LoadImage } from '../../wailsjs/go/main/App';
 import { detectPCBOutline, isOpenCVReady } from '../thermal/edgeDetection';
 
 const Toolbar: React.FC = () => {
-  const { mode, setMode, selection, setImage, image, calibration, setBoundary, clearBoundary, clearSelection } = useStore();
+  const { mode, setMode, selection, setImage, image, calibration, addZone, removeZone, zones, clearSelection } = useStore();
 
   const handleLoadImage = async () => {
     try {
       const path = await SelectImage();
       if (path) {
         const base64 = await LoadImage(path);
-
         const img = new Image();
-        img.onload = () => {
-          setImage(base64, img.width, img.height);
-        };
+        img.onload = () => setImage(base64, img.width, img.height);
         img.src = base64;
       }
     } catch (err) {
@@ -25,15 +22,8 @@ const Toolbar: React.FC = () => {
   };
 
   const handleAutoDetect = async () => {
-    if (!isOpenCVReady()) {
-        alert("OpenCV is still loading, please wait...");
-        return;
-    }
-
-    if (!image || !calibration.mmPerPixel) {
-      alert("Please load an image and calibrate first!");
-      return;
-    }
+    if (!isOpenCVReady()) { alert("OpenCV is still loading, please wait..."); return; }
+    if (!image || !calibration.mmPerPixel) { alert("Please load an image and calibrate first!"); return; }
 
     const img = new Image();
     img.onload = async () => {
@@ -44,7 +34,18 @@ const Toolbar: React.FC = () => {
             x: p.x * (calibration.mmPerPixel as number),
             y: p.y * (calibration.mmPerPixel as number)
           }));
-          setBoundary(mmPoints);
+          const existing = zones.find(z => z.type === 'pcbBoundary');
+          if (existing) removeZone(existing.id);
+          addZone({
+            id: 'pcb-boundary',
+            type: 'pcbBoundary',
+            label: 'PCB Boundary',
+            points: mmPoints,
+            enabled: true,
+            editable: true,
+            selectable: true,
+            deletable: false
+          });
           setMode('editBoundary');
         } else {
           alert("Could not detect a clear PCB outline.");
@@ -59,104 +60,29 @@ const Toolbar: React.FC = () => {
 
   const changeMode = (newMode: any) => {
     setMode(newMode);
-    if (!['editZone', 'editBoundary', 'select'].includes(newMode)) {
-      clearSelection();
-    }
+    if (!['editZone', 'editBoundary', 'select'].includes(newMode)) clearSelection();
   };
 
   const handleEdit = () => {
-      if (selection?.type === 'conductivity-zone') setMode('editZone');
-      else if (selection?.type === 'pcb-boundary') setMode('editBoundary');
+      if (selection?.type === 'polygon') {
+        if (selection.shapeType === 'pcbBoundary') setMode('editBoundary');
+        else setMode('editZone');
+      }
   };
 
   return (
     <div className="flex-none flex flex-col gap-4 p-4 bg-gray-800 text-white w-16 items-center shadow-lg h-full z-20 overflow-y-auto">
-      <button
-        onClick={handleLoadImage}
-        className="p-2 rounded hover:bg-gray-700 transition-colors"
-        title="Load Image"
-      >
-        <Upload size={24} />
-      </button>
-
+      <button onClick={handleLoadImage} className="p-2 rounded hover:bg-gray-700 transition-colors" title="Load Image"><Upload size={24} /></button>
       <div className="w-full h-px bg-gray-700 my-1" />
-
-      <button
-        onClick={() => changeMode('select')}
-        className={`p-2 rounded transition-colors ${mode === 'select' ? 'bg-blue-600' : 'hover:bg-gray-700'}`}
-        title="Select (V)"
-      >
-        <MousePointer2 size={24} />
-      </button>
-
-      <button
-        onClick={() => changeMode('pan')}
-        className={`p-2 rounded transition-colors ${mode === 'pan' ? 'bg-blue-600' : 'hover:bg-gray-700'}`}
-        title="Pan (H)"
-      >
-        <Hand size={24} />
-      </button>
-
-      <button
-        onClick={handleEdit}
-        disabled={!selection || !['conductivity-zone', 'pcb-boundary'].includes(selection?.type || '')}
-        className={`p-2 rounded transition-colors ${['editZone', 'editBoundary'].includes(mode) ? 'bg-blue-600' : 'hover:bg-gray-700 disabled:opacity-30 disabled:cursor-not-allowed'}`}
-        title="Edit Geometry (E)"
-      >
-        <Edit3 size={24} />
-      </button>
-
+      <button onClick={() => changeMode('select')} className={`p-2 rounded transition-colors ${mode === 'select' ? 'bg-blue-600' : 'hover:bg-gray-700'}`} title="Select (V)"><MousePointer2 size={24} /></button>
+      <button onClick={() => changeMode('pan')} className={`p-2 rounded transition-colors ${mode === 'pan' ? 'bg-blue-600' : 'hover:bg-gray-700'}`} title="Pan (H)"><Hand size={24} /></button>
+      <button onClick={handleEdit} disabled={!selection || selection.type !== 'polygon'} className={`p-2 rounded transition-colors ${['editZone', 'editBoundary'].includes(mode) ? 'bg-blue-600' : 'hover:bg-gray-700 disabled:opacity-30 disabled:cursor-not-allowed'}`} title="Edit Geometry (E)"><Edit3 size={24} /></button>
       <div className="w-full h-px bg-gray-700 my-1" />
-
-      <button
-        onClick={() => changeMode('drawZone')}
-        className={`p-2 rounded transition-colors ${mode === 'drawZone' ? 'bg-blue-600' : 'hover:bg-gray-700'}`}
-        title="Draw Conductivity Zone (Z)"
-      >
-        <Zap size={24} />
-      </button>
-
-      <button
-        onClick={() => changeMode('drawBoundary')}
-        className={`p-2 rounded transition-colors ${mode === 'drawBoundary' ? 'bg-blue-600' : 'hover:bg-gray-700'}`}
-        title="Draw PCB Boundary (B)"
-      >
-        <Square size={24} />
-      </button>
-
-      <button
-        onClick={handleAutoDetect}
-        className="p-2 rounded hover:bg-gray-700 transition-colors"
-        title="Auto-detect PCB Boundary"
-      >
-        <Scan size={24} />
-      </button>
-
-      <button
-        onClick={() => changeMode('addComponent')}
-        className={`p-2 rounded transition-colors ${mode === 'addComponent' ? 'bg-blue-600' : 'hover:bg-gray-700'}`}
-        title="Add Component (A)"
-      >
-        <Plus size={24} />
-      </button>
-
-      <button
-        onClick={() => changeMode('calibrate')}
-        className={`p-2 rounded transition-colors ${mode === 'calibrate' ? 'bg-blue-600' : 'hover:bg-gray-700'}`}
-        title="Calibrate Scale (C)"
-      >
-        <Ruler size={24} />
-      </button>
-
-      <div className="mt-auto">
-        <button
-            onClick={clearBoundary}
-            className="p-2 rounded hover:bg-red-900 transition-colors text-red-400"
-            title="Clear Boundary"
-        >
-            <Trash2 size={24} />
-        </button>
-      </div>
+      <button onClick={() => changeMode('drawZone')} className={`p-2 rounded transition-colors ${mode === 'drawZone' ? 'bg-blue-600' : 'hover:bg-gray-700'}`} title="Draw Conductivity Zone (Z)"><Zap size={24} /></button>
+      <button onClick={() => changeMode('drawBoundary')} className={`p-2 rounded transition-colors ${mode === 'drawBoundary' ? 'bg-blue-600' : 'hover:bg-gray-700'}`} title="Draw PCB Boundary (B)"><Square size={24} /></button>
+      <button onClick={handleAutoDetect} className="p-2 rounded hover:bg-gray-700 transition-colors" title="Auto-detect PCB Boundary"><Scan size={24} /></button>
+      <button onClick={() => changeMode('addComponent')} className={`p-2 rounded transition-colors ${mode === 'addComponent' ? 'bg-blue-600' : 'hover:bg-gray-700'}`} title="Add Component (A)"><Plus size={24} /></button>
+      <button onClick={() => changeMode('calibrate')} className={`p-2 rounded transition-colors ${mode === 'calibrate' ? 'bg-blue-600' : 'hover:bg-gray-700'}`} title="Calibrate Scale (C)"><Ruler size={24} /></button>
     </div>
   );
 };

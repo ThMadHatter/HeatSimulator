@@ -48,7 +48,7 @@ export function solveSteadyState(
 
     // 1. Build kGrid from zones
     for (const zone of zones) {
-        if (!zone.enabled || zone.points.length < 3) continue;
+        if (!zone.enabled || zone.points.length < 3 || zone.type !== 'conductivityZone') continue;
 
         const minX = Math.min(...zone.points.map(p => p.x));
         const maxX = Math.max(...zone.points.map(p => p.x));
@@ -65,7 +65,7 @@ export function solveSteadyState(
                 const x = i * dx;
                 const y = j * dx;
                 if (isPointInPolygon({ x, y }, zone.points)) {
-                    kGrid[j * nx + i] = zone.conductivity;
+                    kGrid[j * nx + i] = zone.conductivity ?? 50.0;
                 }
             }
         }
@@ -92,7 +92,6 @@ export function solveSteadyState(
             }
         }
 
-        // Fallback to nearest cell if footprint is too small for resolution
         if (cellsCount === 0) {
             const i = Math.max(0, Math.min(nx - 1, Math.floor(comp.x / dx)));
             const j = Math.max(0, Math.min(ny - 1, Math.floor(comp.y / dx)));
@@ -155,28 +154,6 @@ export function solveSteadyState(
                 const tN = j > 0      ? T[idx - nx] : ambientTemp;
                 const tS = j < ny - 1 ? T[idx + nx] : ambientTemp;
 
-                // Energy balance (steady state):
-                // Net Conduction + Generation - Convection = 0
-                // Conduction (W) = k * A * dT/dx
-                // Source (W) = Q_density (W/m^2) * area_cell (m^2)
-                // BUT our Q is W/m^2 (power per unit area of footprint).
-                // In a 2D PCB model (thickness t):
-                // Conduction term: sum over neighbors of [ k_interf * (T_neigh - T) / dx * (t * dx) ]
-                // Generation term: Q_density * dx * dx * t  <-- NO, Q is power per unit area of PCB.
-                // If Q is W/m^2 (footprint power / area), then Power = Q * dx * dx.
-                // Heat balance for a cell (Area = dx^2):
-                // Sum_neighbors [ k_interf * (T_neigh - T) / dx * (thickness * dx) ] + Q_density * dx * dx - 2 * h * (T - Tamb) * dx * dx = 0
-                // Divide by thickness:
-                // Sum_neighbors [ k_interf * (T_neigh - T) ] + (Q_density * dx * dx / thickness) - (2 * h / thickness) * (T - Tamb) * dx * dx = 0
-
-                // Let's re-derive to be sure:
-                // k * thickness * dx * (T_neigh - T) / dx  => k * thickness * (T_neigh - T)
-                // Sum over 4 neighbors: thickness * [ kE(tE-T) + kW(tW-T) + kN(tN-T) + kS(tS-T) ]
-                // + Q_density * dx * dx
-                // - 2 * h * dx * dx * (T - Tamb) = 0
-
-                // T * [ thickness * (kE + kW + kN + kS) + 2 * h * dx^2 ] = thickness * (kE*tE + kW*tW + kN*tN + kS*tS) + Q_density * dx^2 + 2 * h * dx^2 * Tamb
-
                 const termConduction = (kE * tE + kW * tW + kN * tN + kS * tS) * thicknessM;
                 const termGeneration = Q[idx] * dxM * dxM;
                 const termConvection = beta * ambientTemp * dxM * dxM;
@@ -210,7 +187,6 @@ export function solveSteadyState(
             }
         }
 
-        // Fallback for RθPCB if count is 0
         if (count === 0) {
             const i = Math.max(0, Math.min(nx - 1, Math.floor(comp.x / dx)));
             const j = Math.max(0, Math.min(ny - 1, Math.floor(comp.y / dx)));

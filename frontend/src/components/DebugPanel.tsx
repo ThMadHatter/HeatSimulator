@@ -3,10 +3,12 @@ import { useStore } from '../store/useStore';
 
 const DebugPanel: React.FC = () => {
   const {
-    components, boundary, showGrid, setShowGrid,
+    components, zones, showGrid, setShowGrid,
     showConductivityMap, setShowConductivityMap,
     heatmapResult, debugPointerEvents, setDebugPointerEvents
   } = useStore();
+
+  const pcbBoundary = zones.find(z => z.type === 'pcbBoundary');
 
   const debugInfo = useMemo(() => {
     if (!heatmapResult) {
@@ -30,10 +32,10 @@ const DebugPanel: React.FC = () => {
       hottestCompId: hottestComp ? hottestComp.id : 'N/A',
       numComponents: components.length,
       gridSize: `${heatmapResult.width}x${heatmapResult.height}`,
-      boundaryPoints: boundary.length,
+      boundaryPoints: pcbBoundary?.points.length || 0,
       iterations: heatmapResult.iterations
     };
-  }, [components, boundary, heatmapResult]);
+  }, [components, pcbBoundary, heatmapResult]);
 
   if (!debugInfo) return null;
 
