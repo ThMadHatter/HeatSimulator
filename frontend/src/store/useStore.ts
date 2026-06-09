@@ -21,7 +21,21 @@ export interface Calibration {
   mmPerPixel: number | null;
 }
 
-export type InteractionMode = 'select' | 'calibrate' | 'addComponent' | 'drawBoundary' | 'drawZone';
+export type InteractionMode =
+  | 'select'
+  | 'pan'
+  | 'calibrate'
+  | 'drawBoundary'
+  | 'drawZone'
+  | 'addComponent';
+
+export type Selection =
+  | { type: 'component'; id: string }
+  | { type: 'pcb-boundary' }
+  | { type: 'pcb-boundary-vertex'; index: number }
+  | { type: 'conductivity-zone'; id: string }
+  | { type: 'conductivity-zone-vertex'; zoneId: string; index: number }
+  | null;
 
 interface State {
   image: string | null;
@@ -35,8 +49,12 @@ interface State {
   globalMaxTemperature: number | null; // °C
 
   mode: InteractionMode;
+  selection: Selection;
+
+  // Legacy fields for backward compatibility if needed, but we should phase them out
   selectedComponentId: string | null;
   selectedZoneId: string | null;
+
   heatmapOpacity: number;
   showGrid: boolean;
   showConductivityMap: boolean;
@@ -45,15 +63,16 @@ interface State {
   // Actions
   setImage: (image: string | null, width?: number, height?: number) => void;
   setMode: (mode: InteractionMode) => void;
+  setSelection: (selection: Selection) => void;
+  clearSelection: () => void;
+
   addComponent: (comp: Component) => void;
   updateComponent: (id: string, updates: Partial<Component>) => void;
   removeComponent: (id: string) => void;
-  selectComponent: (id: string | null) => void;
 
   addZone: (zone: Zone) => void;
   updateZone: (id: string, updates: Partial<Zone>) => void;
   removeZone: (id: string) => void;
-  selectZone: (id: string | null) => void;
 
   setStackup: (stackup: Partial<Stackup>) => void;
 
@@ -99,8 +118,10 @@ export const useStore = create<State>((set) => ({
   globalMaxTemperature: null,
 
   mode: 'select',
+  selection: null,
   selectedComponentId: null,
   selectedZoneId: null,
+
   heatmapOpacity: 0.6,
   showGrid: false,
   showConductivityMap: false,
@@ -112,18 +133,33 @@ export const useStore = create<State>((set) => ({
     components: [],
     zones: [],
     boundary: [],
+    selection: null,
+    selectedComponentId: null,
+    selectedZoneId: null,
     calibration: { point1: null, point2: null, distanceMm: 0, mmPerPixel: null }
   }),
   setMode: (mode) => set({ mode }),
+  setSelection: (selection) => set((state) => {
+    let selectedComponentId = null;
+    let selectedZoneId = null;
+    if (selection?.type === 'component') selectedComponentId = selection.id;
+    if (selection?.type === 'conductivity-zone') selectedZoneId = selection.id;
+    // For vertex selections, we also consider the parent selected for backward compat in PropertyPanel
+    if (selection?.type === 'conductivity-zone-vertex') selectedZoneId = selection.zoneId;
+
+    return { selection, selectedComponentId, selectedZoneId };
+  }),
+  clearSelection: () => set({ selection: null, selectedComponentId: null, selectedZoneId: null }),
+
   addComponent: (comp) => set((state) => ({ components: [...state.components, comp] })),
   updateComponent: (id, updates) => set((state) => ({
     components: state.components.map((c) => (c.id === id ? { ...c, ...updates } : c)),
   })),
   removeComponent: (id) => set((state) => ({
     components: state.components.filter((c) => c.id !== id),
+    selection: (state.selection?.type === 'component' && state.selection.id === id) ? null : state.selection,
     selectedComponentId: state.selectedComponentId === id ? null : state.selectedComponentId,
   })),
-  selectComponent: (id) => set({ selectedComponentId: id, selectedZoneId: null }),
 
   addZone: (zone) => set((state) => ({ zones: [...state.zones, zone] })),
   updateZone: (id, updates) => set((state) => ({
@@ -131,9 +167,9 @@ export const useStore = create<State>((set) => ({
   })),
   removeZone: (id) => set((state) => ({
     zones: state.zones.filter((z) => z.id !== id),
+    selection: (state.selection?.type === 'conductivity-zone' && state.selection.id === id) ? null : state.selection,
     selectedZoneId: state.selectedZoneId === id ? null : state.selectedZoneId,
   })),
-  selectZone: (id) => set({ selectedZoneId: id, selectedComponentId: null }),
 
   setStackup: (updates) => set((state) => ({ stackup: { ...state.stackup, ...updates } })),
 

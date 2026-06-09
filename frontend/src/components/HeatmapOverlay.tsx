@@ -58,14 +58,7 @@ const HeatmapOverlay: React.FC<HeatmapOverlayProps> = ({ width, height, onResult
     for (let i = 0; i < data.length; i++) {
         const val = data[i];
         let r, g, b;
-        if (showConductivityMap) {
-            // Scale: 0.3 -> 50
-            // Scale: low k: dark blue, medium k: green, high k: yellow/red
-            // Use existing applyColorMap which does blue -> green -> yellow -> red
-            [r, g, b] = applyColorMap(val, displayMin, displayMax);
-        } else {
-            [r, g, b] = applyColorMap(val, displayMin, displayMax);
-        }
+        [r, g, b] = applyColorMap(val, displayMin, displayMax);
         imageData.data[i * 4] = r;
         imageData.data[i * 4 + 1] = g;
         imageData.data[i * 4 + 2] = b;

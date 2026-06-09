@@ -5,16 +5,24 @@ import { estimateBaseConductivity } from '../thermal/utils';
 
 const PropertyPanel: React.FC = () => {
   const {
-    selectedComponentId, components, updateComponent, removeComponent,
-    selectedZoneId, zones, updateZone, removeZone, selectZone,
+    selection, components, updateComponent, removeComponent,
+    zones, updateZone, removeZone, setSelection,
     stackup, setStackup,
     ambientTemperature, setAmbientTemperature,
     globalMaxTemperature, setGlobalMaxTemperature,
     heatmapResult
   } = useStore();
 
-  const selectedComp = components.find((c) => c.id === selectedComponentId);
-  const selectedZone = zones.find((z) => z.id === selectedZoneId);
+  const selectedComp = useMemo(() => {
+    if (selection?.type === 'component') return components.find(c => c.id === selection.id);
+    return null;
+  }, [selection, components]);
+
+  const selectedZone = useMemo(() => {
+    if (selection?.type === 'conductivity-zone') return zones.find(z => z.id === selection.id);
+    if (selection?.type === 'conductivity-zone-vertex') return zones.find(z => z.id === selection.zoneId);
+    return null;
+  }, [selection, zones]);
 
   const junctionData = useMemo(() => {
     if (!selectedComp || !heatmapResult) return null;
@@ -24,7 +32,7 @@ const PropertyPanel: React.FC = () => {
   const estimatedK = useMemo(() => estimateBaseConductivity(stackup), [stackup]);
 
   return (
-    <div className="w-64 bg-gray-100 p-4 border-l border-gray-300 h-full overflow-y-auto">
+    <div className="flex-none w-64 bg-gray-100 p-4 border-l border-gray-300 h-full overflow-y-auto">
       <div className="mb-8">
         <h2 className="text-lg font-bold mb-4 flex items-center gap-2">
             <Settings size={20} />
@@ -113,11 +121,13 @@ const PropertyPanel: React.FC = () => {
             {zones.length === 0 ? (
                 <p className="text-gray-500 italic text-xs">No zones defined. Use the toolbar to draw zones.</p>
             ) : (
-                zones.map(zone => (
+                zones.map(zone => {
+                    const isSelected = (selection?.type === 'conductivity-zone' && selection.id === zone.id) || (selection?.type === 'conductivity-zone-vertex' && selection.zoneId === zone.id);
+                    return (
                     <div
                         key={zone.id}
-                        className={`p-2 rounded border cursor-pointer transition-colors ${selectedZoneId === zone.id ? 'bg-blue-50 border-blue-300' : 'bg-white border-gray-200 hover:border-gray-300'}`}
-                        onClick={() => selectZone(zone.id)}
+                        className={`p-2 rounded border cursor-pointer transition-colors ${isSelected ? 'bg-blue-50 border-blue-300' : 'bg-white border-gray-200 hover:border-gray-300'}`}
+                        onClick={() => setSelection({ type: 'conductivity-zone', id: zone.id })}
                     >
                         <div className="flex justify-between items-center mb-1">
                             <span className="text-xs font-bold truncate flex-1">{zone.label}</span>
@@ -138,7 +148,7 @@ const PropertyPanel: React.FC = () => {
                         </div>
                         <div className="text-[10px] text-gray-500 font-mono">k: {zone.conductivity} W/mK</div>
                     </div>
-                ))
+                );})
             )}
 
             {selectedZone && (
