@@ -1,7 +1,7 @@
 import { Point, Stackup } from './types';
 
 export function isPointInPolygon(point: Point, polygon: Point[]): boolean {
-    if (polygon.length < 3) return true;
+    if (polygon.length < 3) return false;
 
     let inside = false;
     for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {

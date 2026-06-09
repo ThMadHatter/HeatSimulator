@@ -2,7 +2,11 @@ import React, { useMemo } from 'react';
 import { useStore } from '../store/useStore';
 
 const DebugPanel: React.FC = () => {
-  const { components, boundary, showGrid, setShowGrid, showConductivityMap, setShowConductivityMap, heatmapResult } = useStore();
+  const {
+    components, boundary, showGrid, setShowGrid,
+    showConductivityMap, setShowConductivityMap,
+    heatmapResult, debugPointerEvents, setDebugPointerEvents
+  } = useStore();
 
   const debugInfo = useMemo(() => {
     if (!heatmapResult) {
@@ -63,6 +67,15 @@ const DebugPanel: React.FC = () => {
             className="cursor-pointer"
           />
           Show Conductivity Map
+        </label>
+        <label className="flex items-center gap-2 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={debugPointerEvents}
+            onChange={(e) => setDebugPointerEvents(e.target.checked)}
+            className="cursor-pointer"
+          />
+          Debug Pointer Events
         </label>
       </div>
     </div>

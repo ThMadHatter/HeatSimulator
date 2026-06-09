@@ -1,8 +1,8 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { solveSteadyState } from './solver';
 import { Component } from '../store/useStore';
 import { Zone, Point, Stackup } from './types';
-import { estimateBaseConductivity } from './utils';
+import { estimateBaseConductivity, isPointInPolygon } from './utils';
 
 describe('solveSteadyState', () => {
     const ambientTemp = 25;
@@ -145,5 +145,20 @@ describe('solveSteadyState', () => {
         const r1 = solveSteadyState([c1], [], 100, 100, boundary, ambientTemp, 50);
         const r2 = solveSteadyState([c2], [], 100, 100, boundary, ambientTemp, 50);
         expect(r2.maxTemp).toBeGreaterThan(r1.maxTemp);
+    });
+});
+
+describe('utils interaction logic', () => {
+    it('isPointInPolygon returns false for polygons with < 3 points', () => {
+        const p = { x: 50, y: 50 };
+        expect(isPointInPolygon(p, [])).toBe(false);
+        expect(isPointInPolygon(p, [{x:0, y:0}])).toBe(false);
+        expect(isPointInPolygon(p, [{x:0, y:0}, {x:100, y:0}])).toBe(false);
+    });
+
+    it('isPointInPolygon correctly identifies points inside/outside', () => {
+        const poly = [{x:0, y:0}, {x:100, y:0}, {x:100, y:100}, {x:0, y:100}];
+        expect(isPointInPolygon({x:50, y:50}, poly)).toBe(true);
+        expect(isPointInPolygon({x:150, y:50}, poly)).toBe(false);
     });
 });

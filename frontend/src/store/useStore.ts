@@ -26,7 +26,9 @@ export type InteractionMode =
   | 'pan'
   | 'calibrate'
   | 'drawBoundary'
+  | 'editBoundary'
   | 'drawZone'
+  | 'editZone'
   | 'addComponent';
 
 export type Selection =
@@ -59,6 +61,7 @@ interface State {
   showGrid: boolean;
   showConductivityMap: boolean;
   heatmapResult: HeatmapResult | null;
+  debugPointerEvents: boolean;
 
   // Actions
   setImage: (image: string | null, width?: number, height?: number) => void;
@@ -80,7 +83,7 @@ interface State {
   setCalibrationDistance: (distance: number) => void;
   resetCalibration: () => void;
 
-  setBoundary: (points: { x: number; y: number }[]) => void;
+  setBoundary: (boundary: { x: number; y: number }[]) => void;
   addBoundaryPoint: (point: { x: number; y: number }) => void;
   insertBoundaryPoint: (index: number, point: { x: number; y: number }) => void;
   updateBoundaryPoint: (index: number, point: { x: number; y: number }) => void;
@@ -94,6 +97,7 @@ interface State {
   setShowGrid: (showGrid: boolean) => void;
   setShowConductivityMap: (show: boolean) => void;
   setHeatmapResult: (result: HeatmapResult | null) => void;
+  setDebugPointerEvents: (enabled: boolean) => void;
 }
 
 export const useStore = create<State>((set) => ({
@@ -126,6 +130,7 @@ export const useStore = create<State>((set) => ({
   showGrid: false,
   showConductivityMap: false,
   heatmapResult: null,
+  debugPointerEvents: false,
 
   setImage: (image, width, height) => set({
     image,
@@ -219,6 +224,7 @@ export const useStore = create<State>((set) => ({
   setShowGrid: (showGrid: boolean) => set({ showGrid }),
   setShowConductivityMap: (showConductivityMap: boolean) => set({ showConductivityMap }),
   setHeatmapResult: (heatmapResult) => set({ heatmapResult }),
+  setDebugPointerEvents: (debugPointerEvents) => set({ debugPointerEvents }),
 }));
 
 if (typeof window !== 'undefined') {

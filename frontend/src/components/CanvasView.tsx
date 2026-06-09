@@ -1,13 +1,14 @@
 import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import { Stage, Layer, Image as KonvaImage, Circle, Line, Text, Group, Rect } from 'react-konva';
-import { useStore, Component } from '../store/useStore';
+import { useStore, Component, Selection } from '../store/useStore';
 import HeatmapOverlay from './HeatmapOverlay';
 import DebugPanel from './DebugPanel';
 import Legend from './Legend';
 import { KonvaEventObject } from 'konva/lib/Node';
 import { computeHeatmap } from '../thermal';
 import Konva from 'konva';
-import { Zone } from '../thermal/types';
+import { Zone, Point } from '../thermal/types';
+import { isPointInPolygon } from '../thermal/utils';
 
 const CanvasView: React.FC = () => {
   const {
@@ -15,10 +16,10 @@ const CanvasView: React.FC = () => {
     updateComponent, removeComponent,
     selection, setSelection, clearSelection,
     calibration, setCalibrationPoint,
-    boundary, addBoundaryPoint, updateBoundaryPoint, removeBoundaryPoint,
+    boundary, setBoundary, addBoundaryPoint, updateBoundaryPoint, removeBoundaryPoint,
     insertBoundaryPoint, ambientTemperature, showGrid,
     zones, addZone, updateZone, removeZone,
-    stackup, heatmapResult, setHeatmapResult
+    stackup, heatmapResult, setHeatmapResult, debugPointerEvents
   } = useStore();
 
   const [stage, setStage] = useState({
@@ -28,6 +29,8 @@ const CanvasView: React.FC = () => {
   });
 
   const [isSpacePressed, setIsSpacePressed] = useState(false);
+  const [drawingPoints, setDrawingPoints] = useState<Point[]>([]);
+  const [cursorPos, setCursorPos] = useState<Point | null>(null);
 
   const [heatmapRange, setHeatmapRange] = useState({ min: 25, max: 35 });
   const handleHeatmapResult = useCallback((min: number, max: number) => {
@@ -36,61 +39,87 @@ const CanvasView: React.FC = () => {
 
   const [mousePos, setMousePos] = useState({ x: 0, y: 0, mmX: 0, mmY: 0, temp: 0, k: 0 });
   const [bgImage, setBgImage] = useState<HTMLImageElement | null>(null);
-  const stageRef = useRef<any>(null);
+  const stageRef = useRef<Konva.Stage>(null);
   const [opacity, setOpacity] = useState(1);
+
+  // Debug pointer logger
+  const logPointer = (msg: string, e: any) => {
+    if (!debugPointerEvents) return;
+    const target = e.target;
+    console.log(`[POINTER] ${msg} | mode=${mode} | target=${target.constructor.name} | name=${target.name()} | cancelBubble=${e.cancelBubble}`);
+  };
 
   // Keyboard handlers
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-        // Ignore if typing in an input
         if (['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement?.tagName || '')) {
             return;
         }
 
         if (e.key === 'Escape') {
+            if (mode === 'drawZone' || mode === 'drawBoundary') {
+                setDrawingPoints([]);
+            }
             clearSelection();
             setMode('select');
         }
-        if (e.key === 'v' || e.key === 'V') {
-            setMode('select');
+        if (e.key === 'v' || e.key === 'V') setMode('select');
+        if (e.key === 'h' || e.key === 'H') setMode('pan');
+        if (e.key === 'c' || e.key === 'C') { setMode('calibrate'); clearSelection(); }
+        if (e.key === 'b' || e.key === 'B') { setMode('drawBoundary'); setDrawingPoints([]); clearSelection(); }
+        if (e.key === 'z' || e.key === 'Z') { setMode('drawZone'); setDrawingPoints([]); clearSelection(); }
+        if (e.key === 'a' || e.key === 'A') { setMode('addComponent'); clearSelection(); }
+        if (e.key === 'e' || e.key === 'E') {
+            if (selection?.type === 'conductivity-zone' || selection?.type === 'conductivity-zone-vertex') {
+              setMode('editZone');
+            } else if (selection?.type === 'pcb-boundary' || selection?.type === 'pcb-boundary-vertex') {
+              setMode('editBoundary');
+            }
         }
-        if (e.key === 'h' || e.key === 'H') {
-            setMode('pan');
-        }
-        if (e.key === 'c' || e.key === 'C') {
-            setMode('calibrate');
-            clearSelection();
-        }
-        if (e.key === 'b' || e.key === 'B') {
-            setMode('drawBoundary');
-            clearSelection();
-        }
-        if (e.key === 'z' || e.key === 'Z') {
-            setMode('drawZone');
-            clearSelection();
-        }
-        if (e.key === 'a' || e.key === 'A') {
-            setMode('addComponent');
-            clearSelection();
+
+        if (e.key === 'Enter') {
+            if (mode === 'drawZone' && drawingPoints.length >= 3) {
+                const newZone: Zone = {
+                    id: Math.random().toString(36).substr(2, 9),
+                    label: `Zone ${zones.length + 1}`,
+                    points: drawingPoints,
+                    conductivity: 50.0,
+                    enabled: true
+                };
+                addZone(newZone);
+                setDrawingPoints([]);
+                setSelection({ type: 'conductivity-zone', id: newZone.id });
+                setMode('editZone');
+            }
+            if (mode === 'drawBoundary' && drawingPoints.length >= 3) {
+                setBoundary(drawingPoints);
+                setDrawingPoints([]);
+                setSelection({ type: 'pcb-boundary' });
+                setMode('editBoundary');
+            }
         }
 
         if (e.key === 'Delete' || e.key === 'Backspace') {
-            if (selection?.type === 'component') {
-                removeComponent(selection.id);
-            } else if (selection?.type === 'conductivity-zone') {
-                removeZone(selection.id);
-            } else if (selection?.type === 'pcb-boundary-vertex') {
-                removeBoundaryPoint(selection.index);
-                clearSelection();
-            } else if (selection?.type === 'conductivity-zone-vertex') {
-                const zone = zones.find(z => z.id === selection.zoneId);
-                if (zone && zone.points.length > 3) {
-                    const newPoints = zone.points.filter((_, i) => i !== selection.index);
-                    updateZone(selection.zoneId, { points: newPoints });
-                } else if (zone) {
-                    alert("Zone must have at least 3 vertices.");
+            if (mode === 'select' || mode === 'editZone' || mode === 'editBoundary') {
+                if (selection?.type === 'component') {
+                    removeComponent(selection.id);
+                    clearSelection();
+                } else if (selection?.type === 'conductivity-zone') {
+                    removeZone(selection.id);
+                    clearSelection();
+                } else if (selection?.type === 'pcb-boundary-vertex') {
+                    removeBoundaryPoint(selection.index);
+                    clearSelection();
+                } else if (selection?.type === 'conductivity-zone-vertex') {
+                    const zone = zones.find(z => z.id === selection.zoneId);
+                    if (zone && zone.points.length > 3) {
+                        const newPoints = zone.points.filter((_, i) => i !== selection.index);
+                        updateZone(selection.zoneId, { points: newPoints });
+                    } else if (zone) {
+                        alert("Zone must have at least 3 vertices.");
+                    }
+                    clearSelection();
                 }
-                clearSelection();
             }
         }
 
@@ -109,7 +138,7 @@ const CanvasView: React.FC = () => {
         window.removeEventListener('keydown', handleKeyDown);
         window.removeEventListener('keyup', handleKeyUp);
     };
-  }, [selection, zones, setMode, clearSelection, removeComponent, removeZone, removeBoundaryPoint, updateZone]);
+  }, [selection, zones, mode, drawingPoints, setMode, clearSelection, removeComponent, removeZone, removeBoundaryPoint, updateZone, addZone, setSelection, setBoundary]);
 
   // Animation for flashing red
   useEffect(() => {
@@ -177,10 +206,10 @@ const CanvasView: React.FC = () => {
     }
 
     setMousePos({ x: pointer.x, y: pointer.y, mmX, mmY, temp, k });
+    setCursorPos({ x: mmX, y: mmY });
   };
 
   const handleWheel = (e: KonvaEventObject<WheelEvent>) => {
-    // Only zoom when mouse is over canvas
     e.evt.preventDefault();
     const scaleBy = 1.1;
     const stageObj = stageRef.current;
@@ -205,10 +234,15 @@ const CanvasView: React.FC = () => {
   };
 
   const handleStageClick = (e: KonvaEventObject<MouseEvent>) => {
+    logPointer("StageClick", e);
     const stageObj = e.target.getStage();
     if (!stageObj) return;
     const pos = stageObj.getRelativePointerPosition();
     if (!pos) return;
+
+    const mmX = pos.x * (calibration.mmPerPixel || 1);
+    const mmY = pos.y * (calibration.mmPerPixel || 1);
+    const pointMm = { x: mmX, y: mmY };
 
     if (mode === 'calibrate') {
       setCalibrationPoint({ x: pos.x, y: pos.y });
@@ -220,7 +254,7 @@ const CanvasView: React.FC = () => {
             alert("Calibrate first!");
             return;
         }
-        addBoundaryPoint({ x: pos.x * calibration.mmPerPixel, y: pos.y * calibration.mmPerPixel });
+        setDrawingPoints([...drawingPoints, pointMm]);
         return;
     }
 
@@ -229,29 +263,11 @@ const CanvasView: React.FC = () => {
             alert("Calibrate first!");
             return;
         }
-        const mmX = pos.x * calibration.mmPerPixel;
-        const mmY = pos.y * calibration.mmPerPixel;
-
-        const currentSelectedZoneId = (selection?.type === 'conductivity-zone' || selection?.type === 'conductivity-zone-vertex')
-            ? (selection.type === 'conductivity-zone' ? selection.id : selection.zoneId)
-            : null;
-
-        if (!currentSelectedZoneId) {
-            const newZone: Zone = {
-                id: Math.random().toString(36).substr(2, 9),
-                label: `Zone ${zones.length + 1}`,
-                points: [{ x: mmX, y: mmY }],
-                conductivity: 50.0,
-                enabled: true
-            };
-            addZone(newZone);
-            setSelection({ type: 'conductivity-zone', id: newZone.id });
-        } else {
-            const zone = zones.find(z => z.id === currentSelectedZoneId);
-            if (zone) {
-                updateZone(currentSelectedZoneId, { points: [...zone.points, { x: mmX, y: mmY }] });
-            }
+        if (boundary.length >= 3 && !isPointInPolygon(pointMm, boundary)) {
+            // Optional: visual feedback would be better than an alert
+            return;
         }
+        setDrawingPoints([...drawingPoints, pointMm]);
         return;
     }
 
@@ -263,8 +279,8 @@ const CanvasView: React.FC = () => {
       const newComp: Component = {
         id: Math.random().toString(36).substr(2, 9),
         name: `U${components.length + 1}`,
-        x: pos.x * calibration.mmPerPixel,
-        y: pos.y * calibration.mmPerPixel,
+        x: pointMm.x,
+        y: pointMm.y,
         width: 10,
         height: 10,
         power: 1.0,
@@ -277,9 +293,10 @@ const CanvasView: React.FC = () => {
       return;
     }
 
-    // Clicked on background, deselect
-    if (e.target === e.target.getStage()) {
+    // Clicked on background, deselect if in select mode
+    if (e.target === e.target.getStage() && (mode === 'select' || mode === 'editZone' || mode === 'editBoundary')) {
       clearSelection();
+      setMode('select');
     }
   };
 
@@ -304,11 +321,46 @@ const CanvasView: React.FC = () => {
   }
 
   const boundaryPointsPx = boundary.flatMap(p => [mmToPx(p.x), mmToPx(p.y)]);
+  const drawingPointsPx = drawingPoints.flatMap(p => [mmToPx(p.x), mmToPx(p.y)]);
 
   const isBoundarySelected = selection?.type === 'pcb-boundary' || selection?.type === 'pcb-boundary-vertex';
 
+  // Helper for determining cursor
+  const getCursor = () => {
+    if (isSpacePressed) return 'grabbing';
+    if (mode === 'pan') return 'grab';
+    if (['drawZone', 'drawBoundary', 'addComponent', 'calibrate'].includes(mode)) return 'crosshair';
+    return 'default';
+  };
+
+  const findInsertIndex = (points: Point[], clickPos: { x: number, y: number }) => {
+    let minD = Infinity;
+    let insertIdx = points.length;
+
+    for (let i = 0; i < points.length; i++) {
+        const p1 = { x: mmToPx(points[i].x), y: mmToPx(points[i].y) };
+        const p2 = {
+            x: mmToPx(points[(i + 1) % points.length].x),
+            y: mmToPx(points[(i + 1) % points.length].y)
+        };
+
+        const px = clickPos.x, py = clickPos.y;
+        const l2 = Math.pow(p1.x - p2.x, 2) + Math.pow(p1.y - p2.y, 2);
+        if (l2 === 0) continue;
+        let t = ((px - p1.x) * (p2.x - p1.x) + (py - p1.y) * (p2.y - p1.y)) / l2;
+        t = Math.max(0, Math.min(1, t));
+        const d = Math.sqrt(Math.pow(px - (p1.x + t * (p2.x - p1.x)), 2) + Math.pow(py - (p1.y + t * (p2.y - p1.y)), 2));
+
+        if (d < minD) {
+            minD = d;
+            insertIdx = i + 1;
+        }
+    }
+    return { minD, insertIdx };
+  };
+
   return (
-    <div className="flex-1 bg-gray-300 relative overflow-hidden cursor-crosshair">
+    <div className="flex-1 bg-gray-300 relative overflow-hidden" style={{ cursor: getCursor() }}>
       <Stage
         width={window.innerWidth - 64 - 256}
         height={window.innerHeight - 64}
@@ -318,13 +370,34 @@ const CanvasView: React.FC = () => {
         y={stage.y}
         onWheel={handleWheel}
         onClick={handleStageClick}
+        onDblClick={(e) => {
+            if (mode === 'drawZone' && drawingPoints.length >= 3) {
+                const newZone: Zone = {
+                    id: Math.random().toString(36).substr(2, 9),
+                    label: `Zone ${zones.length + 1}`,
+                    points: drawingPoints,
+                    conductivity: 50.0,
+                    enabled: true
+                };
+                addZone(newZone);
+                setDrawingPoints([]);
+                setSelection({ type: 'conductivity-zone', id: newZone.id });
+                setMode('editZone');
+            }
+            if (mode === 'drawBoundary' && drawingPoints.length >= 3) {
+                setBoundary(drawingPoints);
+                setDrawingPoints([]);
+                setSelection({ type: 'pcb-boundary' });
+                setMode('editBoundary');
+            }
+        }}
         onMouseMove={handleMouseMove}
         onDragEnd={handleDragEnd}
         draggable={isSpacePressed || mode === 'pan'}
         ref={stageRef}
       >
         <Layer>
-          {bgImage && <KonvaImage image={bgImage} listening={false} />}
+          {bgImage && <KonvaImage image={bgImage} listening={false} name="PCB_IMAGE" />}
 
           {calibration.mmPerPixel && imageDimensions && (
             <HeatmapOverlay
@@ -341,6 +414,10 @@ const CanvasView: React.FC = () => {
               const isVertexOfThisZoneSelected = selection?.type === 'conductivity-zone-vertex' && selection.zoneId === zone.id;
               const isAnyPartOfThisZoneSelected = isSelected || isVertexOfThisZoneSelected;
 
+              // In select mode, we show vertices for selected geometry
+              const showVertices = (mode === 'select' || mode === 'editZone') && isAnyPartOfThisZoneSelected;
+              const isInteractive = mode === 'select' || (mode === 'editZone' && isAnyPartOfThisZoneSelected);
+
               return (
                   <Group key={zone.id}>
                     <Line
@@ -350,30 +427,18 @@ const CanvasView: React.FC = () => {
                         closed={true}
                         fill={isAnyPartOfThisZoneSelected ? "#3b82f622" : "#f59e0b22"}
                         hitStrokeWidth={20 / stage.scale}
+                        listening={isInteractive}
+                        name={`ZONE_${zone.id}`}
                         onClick={(e) => {
+                            logPointer("ZoneClick", e);
                             e.cancelBubble = true;
                             setSelection({ type: 'conductivity-zone', id: zone.id });
 
-                            if (mode === 'drawZone' && isAnyPartOfThisZoneSelected && calibration.mmPerPixel) {
+                            if (mode === 'editZone' && isAnyPartOfThisZoneSelected && calibration.mmPerPixel) {
                                 const stageObj = e.target.getStage();
                                 const pos = stageObj?.getRelativePointerPosition();
                                 if (pos) {
-                                    let minD = Infinity;
-                                    let insertIdx = zone.points.length;
-                                    for (let i = 0; i < zone.points.length; i++) {
-                                        const p1 = { x: mmToPx(zone.points[i].x), y: mmToPx(zone.points[i].y) };
-                                        const p2 = {
-                                            x: mmToPx(zone.points[(i + 1) % zone.points.length].x),
-                                            y: mmToPx(zone.points[(i + 1) % zone.points.length].y)
-                                        };
-                                        const px = pos.x, py = pos.y;
-                                        const l2 = Math.pow(p1.x - p2.x, 2) + Math.pow(p1.y - p2.y, 2);
-                                        if (l2 === 0) continue;
-                                        let t = ((px - p1.x) * (p2.x - p1.x) + (py - p1.y) * (p2.y - p1.y)) / l2;
-                                        t = Math.max(0, Math.min(1, t));
-                                        const d = Math.sqrt(Math.pow(px - (p1.x + t * (p2.x - p1.x)), 2) + Math.pow(py - (p1.y + t * (p2.y - p1.y)), 2));
-                                        if (d < minD) { minD = d; insertIdx = i + 1; }
-                                    }
+                                    const { minD, insertIdx } = findInsertIndex(zone.points, pos);
                                     if (minD < 20 / stage.scale) {
                                         const newPoints = [...zone.points];
                                         newPoints.splice(insertIdx, 0, {
@@ -385,8 +450,16 @@ const CanvasView: React.FC = () => {
                                 }
                             }
                         }}
+                        onMouseEnter={(e) => {
+                            const container = e.target.getStage()?.container();
+                            if (container && mode === 'select') container.style.cursor = 'pointer';
+                        }}
+                        onMouseLeave={(e) => {
+                            const container = e.target.getStage()?.container();
+                            if (container && mode === 'select') container.style.cursor = getCursor();
+                        }}
                     />
-                    {isAnyPartOfThisZoneSelected && zone.points.map((p, i) => {
+                    {showVertices && zone.points.map((p, i) => {
                         const isVertexSelected = selection?.type === 'conductivity-zone-vertex' && selection.zoneId === zone.id && selection.index === i;
                         return (
                         <Circle
@@ -398,7 +471,9 @@ const CanvasView: React.FC = () => {
                             stroke="white"
                             strokeWidth={1 / stage.scale}
                             draggable
+                            name={`ZONE_VERTEX_${zone.id}_${i}`}
                             onDragEnd={(e) => {
+                                logPointer("VertexDragEnd", e);
                                 if (calibration.mmPerPixel) {
                                     const newPoints = [...zone.points];
                                     newPoints[i] = {
@@ -409,6 +484,7 @@ const CanvasView: React.FC = () => {
                                 }
                             }}
                             onClick={(e) => {
+                                logPointer("VertexClick", e);
                                 e.cancelBubble = true;
                                 if (e.evt.altKey) {
                                     if (zone.points.length <= 3) {
@@ -428,7 +504,7 @@ const CanvasView: React.FC = () => {
                             }}
                             onMouseLeave={(e) => {
                                 const container = e.target.getStage()?.container();
-                                if (container) container.style.cursor = 'crosshair';
+                                if (container) container.style.cursor = getCursor();
                             }}
                         />
                         );
@@ -436,6 +512,35 @@ const CanvasView: React.FC = () => {
                   </Group>
               );
           })}
+
+          {/* Current Drawing Preview */}
+          {(mode === 'drawZone' || mode === 'drawBoundary') && drawingPoints.length > 0 && (
+              <Group>
+                  <Line
+                      points={drawingPointsPx}
+                      stroke="#3b82f6"
+                      strokeWidth={2 / stage.scale}
+                      dash={[5, 5]}
+                  />
+                  {cursorPos && (
+                      <Line
+                          points={[mmToPx(drawingPoints[drawingPoints.length-1].x), mmToPx(drawingPoints[drawingPoints.length-1].y), mmToPx(cursorPos.x), mmToPx(cursorPos.y)]}
+                          stroke="#3b82f6"
+                          strokeWidth={2 / stage.scale}
+                          opacity={0.5}
+                      />
+                  )}
+                  {drawingPoints.map((p, i) => (
+                      <Circle
+                        key={`drawing-p-${i}`}
+                        x={mmToPx(p.x)}
+                        y={mmToPx(p.y)}
+                        radius={4 / stage.scale}
+                        fill="#3b82f6"
+                      />
+                  ))}
+              </Group>
+          )}
 
           {/* Boundary */}
           {boundary.length > 0 && (
@@ -447,48 +552,37 @@ const CanvasView: React.FC = () => {
                     closed={true}
                     fill={isBoundarySelected ? "#3b82f622" : "#10b98122"}
                     hitStrokeWidth={20 / stage.scale}
+                    listening={mode === 'select' || mode === 'editBoundary'}
+                    name="PCB_BOUNDARY"
                     onClick={(e) => {
+                        logPointer("BoundaryClick", e);
                         e.cancelBubble = true;
                         setSelection({ type: 'pcb-boundary' });
-                        if (mode === 'drawBoundary' && calibration.mmPerPixel) {
+
+                        if (mode === 'editBoundary' && calibration.mmPerPixel) {
                             const stageObj = e.target.getStage();
                             const pos = stageObj?.getRelativePointerPosition();
                             if (pos) {
-                                let minD = Infinity;
-                                let insertIdx = boundary.length;
-
-                                for (let i = 0; i < boundary.length; i++) {
-                                    const p1 = { x: mmToPx(boundary[i].x), y: mmToPx(boundary[i].y) };
-                                    const p2 = {
-                                        x: mmToPx(boundary[(i + 1) % boundary.length].x),
-                                        y: mmToPx(boundary[(i + 1) % boundary.length].y)
-                                    };
-
-                                    const px = pos.x, py = pos.y;
-                                    const l2 = Math.pow(p1.x - p2.x, 2) + Math.pow(p1.y - p2.y, 2);
-                                    if (l2 === 0) continue;
-                                    let t = ((px - p1.x) * (p2.x - p1.x) + (py - p1.y) * (p2.y - p1.y)) / l2;
-                                    t = Math.max(0, Math.min(1, t));
-                                    const d = Math.sqrt(Math.pow(px - (p1.x + t * (p2.x - p1.x)), 2) + Math.pow(py - (p1.y + t * (p2.y - p1.y)), 2));
-
-                                    if (d < minD) {
-                                        minD = d;
-                                        insertIdx = i + 1;
-                                    }
-                                }
-
+                                const { minD, insertIdx } = findInsertIndex(boundary, pos);
                                 if (minD < 20 / stage.scale) {
                                     insertBoundaryPoint(insertIdx, {
                                         x: pos.x * calibration.mmPerPixel,
                                         y: pos.y * calibration.mmPerPixel
                                     });
-                                    e.cancelBubble = true;
                                 }
                             }
                         }
                     }}
+                    onMouseEnter={(e) => {
+                        const container = e.target.getStage()?.container();
+                        if (container && mode === 'select') container.style.cursor = 'pointer';
+                    }}
+                    onMouseLeave={(e) => {
+                        const container = e.target.getStage()?.container();
+                        if (container && mode === 'select') container.style.cursor = getCursor();
+                    }}
                 />
-                {isBoundarySelected && boundary.map((p, i) => {
+                {(mode === 'select' || mode === 'editBoundary') && isBoundarySelected && boundary.map((p, i) => {
                     const isVertexSelected = selection?.type === 'pcb-boundary-vertex' && selection.index === i;
                     return (
                     <Circle
@@ -500,6 +594,7 @@ const CanvasView: React.FC = () => {
                         stroke="white"
                         strokeWidth={1 / stage.scale}
                         draggable
+                        name={`BOUNDARY_VERTEX_${i}`}
                         onDragEnd={(e) => {
                             if (calibration.mmPerPixel) {
                                 updateBoundaryPoint(i, {
@@ -516,6 +611,14 @@ const CanvasView: React.FC = () => {
                             } else {
                                 setSelection({ type: 'pcb-boundary-vertex', index: i });
                             }
+                        }}
+                        onMouseEnter={(e) => {
+                            const container = e.target.getStage()?.container();
+                            if (container) container.style.cursor = 'move';
+                        }}
+                        onMouseLeave={(e) => {
+                            const container = e.target.getStage()?.container();
+                            if (container) container.style.cursor = getCursor();
                         }}
                     />
                     );
@@ -552,6 +655,7 @@ const CanvasView: React.FC = () => {
                           points={[mmToPx(i * dx), 0, mmToPx(i * dx), mmToPx(ny * dx)]}
                           stroke="rgba(255,255,255,0.2)"
                           strokeWidth={1 / stage.scale}
+                          listening={false}
                       />
                   );
               }
@@ -562,6 +666,7 @@ const CanvasView: React.FC = () => {
                           points={[0, mmToPx(j * dx), mmToPx(nx * dx), mmToPx(j * dx)]}
                           stroke="rgba(255,255,255,0.2)"
                           strokeWidth={1 / stage.scale}
+                          listening={false}
                       />
                   );
               }
@@ -592,11 +697,15 @@ const CanvasView: React.FC = () => {
                 x={pxX}
                 y={pxY}
                 draggable={mode === 'select'}
+                name={`COMPONENT_${comp.id}`}
+                listening={mode === 'select'}
                 onDragStart={(e) => {
+                    logPointer("CompDragStart", e);
                     e.cancelBubble = true;
                     setSelection({ type: 'component', id: comp.id });
                 }}
                 onDragEnd={(e: KonvaEventObject<DragEvent>) => {
+                    logPointer("CompDragEnd", e);
                     if (calibration.mmPerPixel) {
                         updateComponent(comp.id, {
                             x: e.target.x() * calibration.mmPerPixel,
@@ -605,6 +714,7 @@ const CanvasView: React.FC = () => {
                     }
                 }}
                 onClick={(e: KonvaEventObject<MouseEvent>) => {
+                    logPointer("CompClick", e);
                     e.cancelBubble = true;
                     setSelection({ type: 'component', id: comp.id });
                 }}
@@ -614,7 +724,7 @@ const CanvasView: React.FC = () => {
                 }}
                 onMouseLeave={(e) => {
                     const container = e.target.getStage()?.container();
-                    if (container && mode === 'select') container.style.cursor = 'crosshair';
+                    if (container && mode === 'select') container.style.cursor = getCursor();
                 }}
               >
                 <Rect
@@ -712,28 +822,38 @@ const CanvasView: React.FC = () => {
       )}
 
       {mode === 'drawBoundary' && (
-        <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-emerald-600 text-white px-4 py-2 rounded-full shadow-lg pointer-events-none text-center">
-          Click background to add points. Drag vertices to move.<br/>
-          Click boundary line to insert point. Alt+Click vertex to remove.
+        <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-emerald-600 text-white px-4 py-2 rounded-full shadow-lg pointer-events-none text-center text-xs">
+          Click to add boundary points. Enter to finish. Esc to cancel.
         </div>
       )}
 
       {mode === 'drawZone' && (
-        <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-orange-600 text-white px-4 py-2 rounded-full shadow-lg pointer-events-none text-center">
-          Click background to start/add to zone. Drag vertices to move.<br/>
-          Click boundary line to insert point. Alt+Click vertex to remove.
+        <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-orange-600 text-white px-4 py-2 rounded-full shadow-lg pointer-events-none text-center text-xs">
+          Click to add points. Double-click or Enter to finish. Esc to cancel.
         </div>
       )}
 
+      {mode === 'editZone' && (
+          <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-blue-600 text-white px-4 py-2 rounded-full shadow-lg pointer-events-none text-center text-xs">
+              Editing Zone. Drag vertices to move. Click edge to add vertex. Alt+Click to remove. Esc to finish.
+          </div>
+      )}
+
+      {mode === 'editBoundary' && (
+          <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-blue-600 text-white px-4 py-2 rounded-full shadow-lg pointer-events-none text-center text-xs">
+              Editing PCB Boundary. Drag vertices to move. Click edge to add vertex. Alt+Click to remove. Esc to finish.
+          </div>
+      )}
+
       <div className="absolute top-4 left-20 bg-gray-900/80 text-white p-3 rounded-lg text-[10px] font-mono border border-white/10 backdrop-blur-sm pointer-events-none">
-          <div className="font-bold text-blue-400 border-b border-white/10 mb-1 pb-1">SHORTCUTS</div>
+          <div className="font-bold text-blue-400 border-b border-white/10 mb-1 pb-1 uppercase">Standard Tools</div>
           <div className="grid grid-cols-[80px_1fr] gap-y-1">
               <span className="text-gray-400">V:</span> <span>Select</span>
               <span className="text-gray-400">H:</span> <span>Pan</span>
-              <span className="text-gray-400">Space+Drag:</span> <span>Temp Pan</span>
-              <span className="text-gray-400">Esc:</span> <span>Cancel/Select</span>
-              <span className="text-gray-400">Delete:</span> <span>Remove Selected</span>
-              <span className="text-gray-400">Alt+Click:</span> <span>Remove Vertex</span>
+              <span className="text-gray-400">E:</span> <span>Edit Geometry</span>
+              <span className="text-gray-400">Space:</span> <span>Temp Pan</span>
+              <span className="text-gray-400">Esc:</span> <span>Select/Cancel</span>
+              <span className="text-gray-400">Delete:</span> <span>Remove</span>
           </div>
       </div>
 

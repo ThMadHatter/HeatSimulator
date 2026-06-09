@@ -1,11 +1,11 @@
 import React from 'react';
 import { useStore } from '../store/useStore';
-import { Upload, Ruler, Plus, MousePointer2, Square, Trash2, Scan, Zap, Hand } from 'lucide-react';
+import { Upload, Ruler, Plus, MousePointer2, Square, Trash2, Scan, Zap, Hand, Edit3 } from 'lucide-react';
 import { SelectImage, LoadImage } from '../../wailsjs/go/main/App';
 import { detectPCBOutline, isOpenCVReady } from '../thermal/edgeDetection';
 
 const Toolbar: React.FC = () => {
-  const { mode, setMode, setImage, image, calibration, setBoundary, clearBoundary, clearSelection } = useStore();
+  const { mode, setMode, selection, setImage, image, calibration, setBoundary, clearBoundary, clearSelection } = useStore();
 
   const handleLoadImage = async () => {
     try {
@@ -13,7 +13,6 @@ const Toolbar: React.FC = () => {
       if (path) {
         const base64 = await LoadImage(path);
 
-        // Get image dimensions
         const img = new Image();
         img.onload = () => {
           setImage(base64, img.width, img.height);
@@ -46,7 +45,7 @@ const Toolbar: React.FC = () => {
             y: p.y * (calibration.mmPerPixel as number)
           }));
           setBoundary(mmPoints);
-          setMode('drawBoundary');
+          setMode('editBoundary');
         } else {
           alert("Could not detect a clear PCB outline.");
         }
@@ -60,13 +59,18 @@ const Toolbar: React.FC = () => {
 
   const changeMode = (newMode: any) => {
     setMode(newMode);
-    if (newMode !== 'select') {
+    if (!['editZone', 'editBoundary', 'select'].includes(newMode)) {
       clearSelection();
     }
   };
 
+  const handleEdit = () => {
+      if (selection?.type === 'conductivity-zone') setMode('editZone');
+      else if (selection?.type === 'pcb-boundary') setMode('editBoundary');
+  };
+
   return (
-    <div className="flex-none flex flex-col gap-4 p-4 bg-gray-800 text-white w-16 items-center shadow-lg h-full z-20">
+    <div className="flex-none flex flex-col gap-4 p-4 bg-gray-800 text-white w-16 items-center shadow-lg h-full z-20 overflow-y-auto">
       <button
         onClick={handleLoadImage}
         className="p-2 rounded hover:bg-gray-700 transition-colors"
@@ -75,7 +79,7 @@ const Toolbar: React.FC = () => {
         <Upload size={24} />
       </button>
 
-      <div className="w-full h-px bg-gray-700 my-2" />
+      <div className="w-full h-px bg-gray-700 my-1" />
 
       <button
         onClick={() => changeMode('select')}
@@ -94,19 +98,22 @@ const Toolbar: React.FC = () => {
       </button>
 
       <button
-        onClick={handleAutoDetect}
-        className="p-2 rounded hover:bg-gray-700 transition-colors"
-        title="Auto-detect PCB Boundary"
+        onClick={handleEdit}
+        disabled={!selection || !['conductivity-zone', 'pcb-boundary'].includes(selection?.type || '')}
+        className={`p-2 rounded transition-colors ${['editZone', 'editBoundary'].includes(mode) ? 'bg-blue-600' : 'hover:bg-gray-700 disabled:opacity-30 disabled:cursor-not-allowed'}`}
+        title="Edit Geometry (E)"
       >
-        <Scan size={24} />
+        <Edit3 size={24} />
       </button>
 
+      <div className="w-full h-px bg-gray-700 my-1" />
+
       <button
-        onClick={() => changeMode('calibrate')}
-        className={`p-2 rounded transition-colors ${mode === 'calibrate' ? 'bg-blue-600' : 'hover:bg-gray-700'}`}
-        title="Calibrate Scale (C)"
+        onClick={() => changeMode('drawZone')}
+        className={`p-2 rounded transition-colors ${mode === 'drawZone' ? 'bg-blue-600' : 'hover:bg-gray-700'}`}
+        title="Draw Conductivity Zone (Z)"
       >
-        <Ruler size={24} />
+        <Zap size={24} />
       </button>
 
       <button
@@ -118,11 +125,11 @@ const Toolbar: React.FC = () => {
       </button>
 
       <button
-        onClick={() => changeMode('drawZone')}
-        className={`p-2 rounded transition-colors ${mode === 'drawZone' ? 'bg-blue-600' : 'hover:bg-gray-700'}`}
-        title="Draw Conductivity Zone (Z)"
+        onClick={handleAutoDetect}
+        className="p-2 rounded hover:bg-gray-700 transition-colors"
+        title="Auto-detect PCB Boundary"
       >
-        <Zap size={24} />
+        <Scan size={24} />
       </button>
 
       <button
@@ -131,6 +138,14 @@ const Toolbar: React.FC = () => {
         title="Add Component (A)"
       >
         <Plus size={24} />
+      </button>
+
+      <button
+        onClick={() => changeMode('calibrate')}
+        className={`p-2 rounded transition-colors ${mode === 'calibrate' ? 'bg-blue-600' : 'hover:bg-gray-700'}`}
+        title="Calibrate Scale (C)"
+      >
+        <Ruler size={24} />
       </button>
 
       <div className="mt-auto">
