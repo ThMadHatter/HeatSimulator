@@ -359,9 +359,11 @@ const CanvasView: React.FC = () => {
             let statusColor = "#10b981"; // green
             if (junction) {
                 if (junction.isOverLimit) statusColor = "#ef4444"; // red
-                else if (junction.ratingPercent > 90) statusColor = "#ef4444"; // red
-                else if (junction.ratingPercent > 70) statusColor = "#f59e0b"; // yellow/orange
+                else if (junction.ratingPercent && junction.ratingPercent > 90) statusColor = "#ef4444"; // red
+                else if (junction.ratingPercent && junction.ratingPercent > 70) statusColor = "#f59e0b"; // yellow/orange
             }
+
+            const label = `${comp.name}\nTj: ${junction?.tj?.toFixed(1) ?? 'N/A'}°C\nTpcb: ${junction?.tPcb.toFixed(1)}°C\nRp: ${junction?.rThetaPcb.toFixed(2)}°C/W`;
 
             return (
               <Group
@@ -389,43 +391,43 @@ const CanvasView: React.FC = () => {
                     width={pxW}
                     height={pxH}
                     fill="transparent"
-                    stroke={isSelected ? "#3b82f6" : "rgba(255,255,255,0.5)"}
-                    strokeWidth={2 / stage.scale}
-                    dash={isSelected ? [] : [5, 5]}
+                    stroke={isSelected ? "#3b82f6" : statusColor}
+                    strokeWidth={isSelected ? 3 / stage.scale : 2 / stage.scale}
+                    opacity={0.8}
                 />
                 <Circle
                   radius={8 / stage.scale}
                   fill={statusColor}
-                  opacity={junction?.isOverLimit ? opacity : 1}
+                  opacity={(junction?.isOverLimit || (junction?.ratingPercent && junction.ratingPercent > 90)) ? opacity : 1}
                   stroke="white"
                   strokeWidth={2 / stage.scale}
                   shadowBlur={junction?.isOverLimit ? 10 : 0}
                   shadowColor="red"
                 />
                 <Text
-                  text={`${comp.name}\nTj: ${junction?.tj.toFixed(1)}°C\n(${junction?.ratingPercent.toFixed(0)}%)`}
-                  fontSize={10 / stage.scale}
+                  text={label}
+                  fontSize={9 / stage.scale}
                   fill="white"
                   fontStyle="bold"
                   y={pxH/2 + 5 / stage.scale}
                   align="center"
-                  width={100 / stage.scale}
-                  x={-50 / stage.scale}
+                  width={120 / stage.scale}
+                  x={-60 / stage.scale}
                   shadowColor="black"
                   shadowBlur={2}
                   shadowOffset={{x:1, y:1}}
                   shadowOpacity={1}
                 />
-                {junction?.isOverLimit && (
+                {(junction?.isOverLimit || junction?.warning) && (
                     <Text
-                        text="⚠️ CRITICAL"
+                        text={junction?.isOverLimit ? "⚠️ CRITICAL" : `⚠️ ${junction?.warning}`}
                         fontSize={10 / stage.scale}
                         fill="#ef4444"
                         fontStyle="bold"
                         y={-pxH/2 - 15 / stage.scale}
                         align="center"
-                        width={100 / stage.scale}
-                        x={-50 / stage.scale}
+                        width={120 / stage.scale}
+                        x={-60 / stage.scale}
                         opacity={opacity}
                     />
                 )}
@@ -439,11 +441,32 @@ const CanvasView: React.FC = () => {
       <Legend minTemp={heatmapRange.min} maxTemp={heatmapRange.max} />
 
       {calibration.mmPerPixel && (
-        <div className="absolute bottom-4 right-4 bg-black/80 text-white p-2 rounded text-[10px] font-mono pointer-events-none border border-white/20 backdrop-blur-sm shadow-xl">
-            <div className="text-blue-400 font-bold mb-1">CURSOR INFO</div>
-            X: {mousePos.mmX.toFixed(1)} mm<br/>
-            Y: {mousePos.mmY.toFixed(1)} mm<br/>
-            T: <span className={mousePos.temp > 80 ? "text-red-400" : "text-green-400"}>{mousePos.temp.toFixed(1)} °C</span>
+        <div className="absolute bottom-4 right-4 bg-black/80 text-white p-3 rounded text-[10px] font-mono pointer-events-none border border-white/20 backdrop-blur-sm shadow-xl min-w-[150px]">
+            <div className="text-blue-400 font-bold mb-1 border-b border-white/10 pb-1">CURSOR INFO</div>
+            <div className="grid grid-cols-2 gap-x-2">
+                <span className="text-gray-400">POS X:</span> <span>{mousePos.mmX.toFixed(1)} mm</span>
+                <span className="text-gray-400">POS Y:</span> <span>{mousePos.mmY.toFixed(1)} mm</span>
+                <span className="text-gray-400">TEMP:</span> <span className={mousePos.temp > 80 ? "text-red-400" : "text-green-400"}>{mousePos.temp.toFixed(1)} °C</span>
+            </div>
+
+            {(() => {
+                const nearest = components.map(c => {
+                    const dx = c.x - mousePos.mmX;
+                    const dy = c.y - mousePos.mmY;
+                    const dist = Math.sqrt(dx*dx + dy*dy);
+                    return { c, dist };
+                }).filter(i => i.dist < 20).sort((a,b) => a.dist - b.dist)[0];
+
+                if (nearest) {
+                    return (
+                        <div className="mt-2 pt-2 border-t border-white/10">
+                            <div className="text-emerald-400 font-bold">NEAR: {nearest.c.name}</div>
+                            <div className="text-gray-400">Dist: {nearest.dist.toFixed(1)} mm</div>
+                        </div>
+                    );
+                }
+                return null;
+            })()}
         </div>
       )}
 

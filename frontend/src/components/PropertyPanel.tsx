@@ -121,25 +121,26 @@ const PropertyPanel: React.FC = () => {
                 />
             </div>
 
-            <div className="grid grid-cols-2 gap-2">
-                <div>
-                    <label className="block text-xs font-medium text-gray-700">θJA (°C/W)</label>
-                    <input
-                    type="number"
-                    value={selectedComp.thetaJA || 0}
-                    onChange={(e) => updateComponent(selectedComp.id, { thetaJA: parseFloat(e.target.value) || 0 })}
-                    className="mt-1 block w-full rounded border-gray-300 shadow-sm sm:text-xs p-1 border"
-                    />
-                </div>
-                <div>
-                    <label className="block text-xs font-medium text-gray-700">θJC (°C/W)</label>
-                    <input
-                    type="number"
-                    value={selectedComp.thetaJC || 0}
-                    onChange={(e) => updateComponent(selectedComp.id, { thetaJC: parseFloat(e.target.value) || 0 })}
-                    className="mt-1 block w-full rounded border-gray-300 shadow-sm sm:text-xs p-1 border"
-                    />
-                </div>
+            <div>
+                <label className="block text-xs font-medium text-gray-700">thetaJC (°C/W) [Board-to-Junction]</label>
+                <input
+                type="number"
+                value={selectedComp.thetaJC || ''}
+                placeholder="N/A"
+                onChange={(e) => updateComponent(selectedComp.id, { thetaJC: e.target.value ? parseFloat(e.target.value) : undefined })}
+                className="mt-1 block w-full rounded border-gray-300 shadow-sm sm:text-xs p-1 border"
+                />
+            </div>
+
+            <div>
+                <label className="block text-xs font-medium text-gray-700">thetaJA (°C/W) [Ambient-to-Junction]</label>
+                <input
+                type="number"
+                value={selectedComp.thetaJA || ''}
+                placeholder="N/A"
+                onChange={(e) => updateComponent(selectedComp.id, { thetaJA: e.target.value ? parseFloat(e.target.value) : undefined })}
+                className="mt-1 block w-full rounded border-gray-300 shadow-sm sm:text-xs p-1 border"
+                />
             </div>
 
             <div>
