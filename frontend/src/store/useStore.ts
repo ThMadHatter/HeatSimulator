@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { Zone } from '../thermal/types';
 
 export interface Component {
   id: string;
@@ -26,6 +27,7 @@ interface State {
   image: string | null;
   imageDimensions: { width: number; height: number } | null;
   components: Component[];
+  zones: Zone[];
   calibration: Calibration;
   boundary: { x: number; y: number }[]; // in mm
   ambientTemperature: number; // °C
@@ -68,6 +70,7 @@ export const useStore = create<State>((set) => ({
   image: null,
   imageDimensions: null,
   components: [],
+  zones: [],
   calibration: {
     point1: null,
     point2: null,
@@ -88,6 +91,7 @@ export const useStore = create<State>((set) => ({
     image,
     imageDimensions: width && height ? { width, height } : null,
     components: [],
+    zones: [],
     boundary: [],
     calibration: { point1: null, point2: null, distanceMm: 0, mmPerPixel: null }
   }),
@@ -148,3 +152,7 @@ export const useStore = create<State>((set) => ({
   setHeatmapOpacity: (heatmapOpacity) => set({ heatmapOpacity }),
   setShowGrid: (showGrid: boolean) => set({ showGrid }),
 }));
+
+if (typeof window !== 'undefined') {
+  (window as any).useStore = useStore;
+}

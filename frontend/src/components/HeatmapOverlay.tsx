@@ -13,7 +13,7 @@ interface HeatmapOverlayProps {
 
 const HeatmapOverlay: React.FC<HeatmapOverlayProps> = ({ width, height, widthMm, heightMm, onResult }) => {
   const {
-    components, heatmapOpacity, boundary,
+    components, zones, heatmapOpacity, boundary,
     ambientTemperature, globalMaxTemperature
   } = useStore();
 
@@ -27,6 +27,7 @@ const HeatmapOverlay: React.FC<HeatmapOverlayProps> = ({ width, height, widthMm,
     const resolution = 150;
     const result = computeHeatmap(
         components,
+        zones,
         widthMm,
         heightMm,
         boundary,
@@ -38,7 +39,7 @@ const HeatmapOverlay: React.FC<HeatmapOverlayProps> = ({ width, height, widthMm,
     const displayMinT = result.minTemp;
 
     return { data: result.data, displayMinT, displayMaxT, nx: result.width, ny: result.height };
-  }, [components, widthMm, heightMm, boundary, ambientTemperature, globalMaxTemperature, width, height]);
+  }, [components, zones, widthMm, heightMm, boundary, ambientTemperature, globalMaxTemperature, width, height]);
 
   useEffect(() => {
     if (!data || nx === 0 || ny === 0) {
