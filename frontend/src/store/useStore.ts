@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { Zone } from '../thermal/types';
+import { Zone, HeatmapResult } from '../thermal/types';
 
 export interface Component {
   id: string;
@@ -31,13 +31,13 @@ interface State {
   calibration: Calibration;
   boundary: { x: number; y: number }[]; // in mm
   ambientTemperature: number; // °C
-  defaultBoardSigma: number; // mm (kept for compatibility if needed elsewhere, but not used in solver)
   globalMaxTemperature: number | null; // °C
 
   mode: InteractionMode;
   selectedComponentId: string | null;
   heatmapOpacity: number;
   showGrid: boolean;
+  heatmapResult: HeatmapResult | null;
 
   // Actions
   setImage: (image: string | null, width?: number, height?: number) => void;
@@ -59,11 +59,11 @@ interface State {
   clearBoundary: () => void;
 
   setAmbientTemperature: (temp: number) => void;
-  setDefaultBoardSigma: (sigma: number) => void;
   setGlobalMaxTemperature: (temp: number | null) => void;
 
   setHeatmapOpacity: (opacity: number) => void;
   setShowGrid: (showGrid: boolean) => void;
+  setHeatmapResult: (result: HeatmapResult | null) => void;
 }
 
 export const useStore = create<State>((set) => ({
@@ -79,13 +79,13 @@ export const useStore = create<State>((set) => ({
   },
   boundary: [],
   ambientTemperature: 25,
-  defaultBoardSigma: 5,
   globalMaxTemperature: null,
 
   mode: 'select',
   selectedComponentId: null,
   heatmapOpacity: 0.6,
   showGrid: false,
+  heatmapResult: null,
 
   setImage: (image, width, height) => set({
     image,
@@ -146,11 +146,11 @@ export const useStore = create<State>((set) => ({
   clearBoundary: () => set({ boundary: [] }),
 
   setAmbientTemperature: (ambientTemperature) => set({ ambientTemperature }),
-  setDefaultBoardSigma: (defaultBoardSigma) => set({ defaultBoardSigma }),
   setGlobalMaxTemperature: (globalMaxTemperature) => set({ globalMaxTemperature }),
 
   setHeatmapOpacity: (heatmapOpacity) => set({ heatmapOpacity }),
   setShowGrid: (showGrid: boolean) => set({ showGrid }),
+  setHeatmapResult: (heatmapResult) => set({ heatmapResult }),
 }));
 
 if (typeof window !== 'undefined') {

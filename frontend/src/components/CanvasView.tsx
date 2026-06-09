@@ -54,10 +54,14 @@ const CanvasView: React.FC = () => {
     }
   }, [image]);
 
-  const { zones } = useStore();
-  const heatmapResult = useMemo(() => {
-    if (!imageDimensions || !calibration.mmPerPixel || components.length === 0) return null;
-    return computeHeatmap(
+  const { zones, heatmapResult, setHeatmapResult } = useStore();
+
+  useEffect(() => {
+    if (!imageDimensions || !calibration.mmPerPixel || components.length === 0) {
+        setHeatmapResult(null);
+        return;
+    }
+    const result = computeHeatmap(
         components,
         zones,
         imageDimensions.width * calibration.mmPerPixel,
@@ -66,7 +70,8 @@ const CanvasView: React.FC = () => {
         ambientTemperature,
         150
     );
-  }, [components, zones, imageDimensions, calibration, boundary, ambientTemperature]);
+    setHeatmapResult(result);
+  }, [components, zones, imageDimensions, calibration, boundary, ambientTemperature, setHeatmapResult]);
 
   const handleMouseMove = (e: any) => {
     const stageObj = e.target.getStage();
@@ -210,8 +215,6 @@ const CanvasView: React.FC = () => {
             <HeatmapOverlay
               width={imageDimensions.width}
               height={imageDimensions.height}
-              widthMm={imageDimensions.width * calibration.mmPerPixel}
-              heightMm={imageDimensions.height * calibration.mmPerPixel}
               onResult={handleHeatmapResult}
             />
           )}

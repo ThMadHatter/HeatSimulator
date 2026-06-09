@@ -3,22 +3,17 @@ import { useStore } from '../store/useStore';
 import { computeHeatmap } from '../thermal';
 
 const DebugPanel: React.FC = () => {
-  const { components, zones, imageDimensions, calibration, boundary, ambientTemperature, showGrid, setShowGrid } = useStore();
+  const { components, boundary, showGrid, setShowGrid, heatmapResult } = useStore();
 
   const debugInfo = useMemo(() => {
-    if (!imageDimensions || !calibration.mmPerPixel || components.length === 0) {
+    if (!heatmapResult) {
         return null;
     }
-
-    const widthMm = imageDimensions.width * calibration.mmPerPixel;
-    const heightMm = imageDimensions.height * calibration.mmPerPixel;
-    const resolution = 150;
-    const result = computeHeatmap(components, zones, widthMm, heightMm, boundary, ambientTemperature, resolution);
 
     // Find hottest junction
     let hottestComp = null;
     let maxTj = -1;
-    for (const j of result.junctions) {
+    for (const j of heatmapResult.junctions) {
         const currentTj = j.tj ?? j.tPcb; // Use Tpcb if Tj is not available
         if (currentTj > maxTj) {
             maxTj = currentTj;
@@ -27,15 +22,15 @@ const DebugPanel: React.FC = () => {
     }
 
     return {
-      maxTemp: result.maxTemp.toFixed(1),
+      maxTemp: heatmapResult.maxTemp.toFixed(1),
       hottestCompName: hottestComp ? hottestComp.name : 'N/A',
       hottestCompId: hottestComp ? hottestComp.id : 'N/A',
       numComponents: components.length,
-      gridSize: `${result.width}x${result.height}`,
+      gridSize: `${heatmapResult.width}x${heatmapResult.height}`,
       boundaryPoints: boundary.length,
-      iterations: result.iterations
+      iterations: heatmapResult.iterations
     };
-  }, [components, zones, imageDimensions, calibration, boundary, ambientTemperature]);
+  }, [components, boundary, heatmapResult]);
 
   if (!debugInfo) return null;
 
@@ -50,17 +45,6 @@ const DebugPanel: React.FC = () => {
         <span>Boundary:</span> <span className="text-right">{debugInfo.boundaryPoints} pts</span>
         <span>Grid:</span> <span className="text-right">{debugInfo.gridSize}</span>
         <span>Iterations:</span> <span className="text-right">{debugInfo.iterations}</span>
-      </div>
-      <div className="mt-2 pt-2 border-t border-white/20">
-        <label className="flex items-center gap-2 cursor-pointer">
-          <input
-            type="checkbox"
-            checked={showGrid}
-            onChange={(e) => setShowGrid(e.target.checked)}
-            className="cursor-pointer"
-          />
-          Show Solver Grid
-        </label>
       </div>
       <div className="mt-2 pt-2 border-t border-white/20">
         <label className="flex items-center gap-2 cursor-pointer">

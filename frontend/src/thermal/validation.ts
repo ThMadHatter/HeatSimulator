@@ -41,9 +41,9 @@ function runValidation() {
 
     const junction = result.junctions[0];
     console.log(`Component 1 Result:`);
-    console.log(` - Tpcb: ${junction.tpcb.toFixed(2)} °C`);
-    console.log(` - RthPCB: ${junction.rthPcb.toFixed(2)} K/W`);
-    console.log(` - Tj: ${junction.tj.toFixed(2)} °C`);
+    console.log(` - Tpcb: ${junction.tPcb.toFixed(2)} °C`);
+    console.log(` - RthPCB: ${junction.rThetaPcb.toFixed(2)} K/W`);
+    console.log(` - Tj: ${junction.tj?.toFixed(2) ?? 'N/A'} °C`);
 
     // Basic symmetry check
     const nx = result.width;
@@ -63,7 +63,7 @@ function runValidation() {
     const symmetric = Math.abs(t_left - t_right) < 0.1 && Math.abs(t_up - t_down) < 0.1;
     console.log(`Symmetry Result: ${symmetric ? 'PASS' : 'FAIL'}`);
 
-    if (junction.rthPcb > 0 && symmetric) {
+    if (junction.rThetaPcb > 0 && symmetric) {
         console.log("Validation PASSED");
     } else {
         console.log("Validation FAILED");
