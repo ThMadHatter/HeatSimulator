@@ -152,10 +152,16 @@ const CanvasView: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    if (stageRef.current) {
-        (window as any).stage = stageRef.current;
-    }
-  }, []);
+    const checkStage = () => {
+        if (stageRef.current) {
+            (window as any).stage = stageRef.current;
+        }
+    };
+    checkStage();
+    // Re-check in case Konva initialization is delayed
+    const timer = setTimeout(checkStage, 500);
+    return () => clearTimeout(timer);
+  }, [stageRef]);
 
   useEffect(() => {
     if (image) {
@@ -544,6 +550,8 @@ const CanvasView: React.FC = () => {
           })}
         </Layer>
       </Stage>
+
+      <Legend />
 
       {calibration.mmPerPixel && (
         <div className="absolute bottom-4 right-4 bg-black/80 text-white p-3 rounded text-[10px] font-mono pointer-events-none border border-white/20 backdrop-blur-sm shadow-xl min-w-[150px]">
