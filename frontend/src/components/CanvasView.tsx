@@ -12,42 +12,48 @@ import { Zone, Point, PolygonType } from '../thermal/types';
 import { isPointInPolygon } from '../thermal/utils';
 
 const CanvasView: React.FC = () => {
-  const {
-    image, imageDimensions, mode, setMode, components, addComponent,
-    updateComponent, removeComponent,
-    selection, setSelection, clearSelection,
-    calibration, setCalibrationPoint,
-    ambientTemperature, showGrid,
-    zones, addZone, updateZone, removeZone,
-    stackup, heatmapResult, setHeatmapResult, debugPointerEvents
-  } = useStore();
+  const image = useStore(state => state.image);
+  const imageDimensions = useStore(state => state.imageDimensions);
+  const mode = useStore(state => state.mode);
+  const setMode = useStore(state => state.setMode);
+  const components = useStore(state => state.components);
+  const addComponent = useStore(state => state.addComponent);
+  const updateComponent = useStore(state => state.updateComponent);
+  const removeComponent = useStore(state => state.removeComponent);
+  const selection = useStore(state => state.selection);
+  const setSelection = useStore(state => state.setSelection);
+  const clearSelection = useStore(state => state.clearSelection);
+  const calibration = useStore(state => state.calibration);
+  const setCalibrationPoint = useStore(state => state.setCalibrationPoint);
+  const ambientTemperature = useStore(state => state.ambientTemperature);
+  const zones = useStore(state => state.zones);
+  const addZone = useStore(state => state.addZone);
+  const updateZone = useStore(state => state.updateZone);
+  const removeZone = useStore(state => state.removeZone);
+  const stackup = useStore(state => state.stackup);
+  const heatmapResult = useStore(state => state.heatmapResult);
+  const setHeatmapResult = useStore(state => state.setHeatmapResult);
+  const debugPointerEvents = useStore(state => state.debugPointerEvents);
 
   const [stage, setStage] = useState({ scale: 1, x: 0, y: 0 });
   const [isSpacePressed, setIsSpacePressed] = useState(false);
   const [drawingPoints, setDrawingPoints] = useState<Point[]>([]);
   const [cursorPos, setCursorPos] = useState<Point | null>(null);
 
-  const [heatmapRange, setHeatmapRange] = useState({ min: 25, max: 35 });
-  const handleHeatmapResult = useCallback((min: number, max: number) => {
-    setHeatmapRange({ min, max });
-  }, []);
-
   const [mousePos, setMousePos] = useState({ x: 0, y: 0, mmX: 0, mmY: 0, temp: 0, k: 0 });
   const [bgImage, setBgImage] = useState<HTMLImageElement | null>(null);
   const stageRef = useRef<Konva.Stage>(null);
   const [opacity, setOpacity] = useState(1);
 
-  const pcbBoundary = zones.find(z => z.type === 'pcbBoundary');
-  const boundaryPoints = pcbBoundary?.points || [];
+  const pcbBoundary = useMemo(() => zones.find(z => z.type === 'pcbBoundary'), [zones]);
+  const boundaryPoints = useMemo(() => pcbBoundary?.points || [], [pcbBoundary]);
 
-  // Debug pointer logger
   const logPointer = (msg: string, e: any) => {
     if (!debugPointerEvents) return;
     const target = e.target;
     console.log(`[POINTER] ${msg} | mode=${mode} | target=${target.constructor.name} | name=${target.name()} | cancelBubble=${e.cancelBubble}`);
   };
 
-  // Keyboard handlers
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
         if (['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement?.tagName || '')) return;
@@ -132,7 +138,6 @@ const CanvasView: React.FC = () => {
     };
   }, [selection, zones, mode, drawingPoints, setMode, clearSelection, removeComponent, removeZone, updateZone, addZone, setSelection]);
 
-  // Animation for flashing red
   useEffect(() => {
     const anim = new Konva.Animation((frame) => {
         if (!frame) return;
@@ -158,6 +163,7 @@ const CanvasView: React.FC = () => {
         setHeatmapResult(null);
         return;
     }
+
     const result = computeHeatmap(
         components,
         zones.filter(z => z.type === 'conductivityZone'),
@@ -169,7 +175,8 @@ const CanvasView: React.FC = () => {
         stackup
     );
     setHeatmapResult(result);
-  }, [components, zones, imageDimensions, calibration, boundaryPoints, ambientTemperature, stackup, setHeatmapResult]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [components, zones, imageDimensions, calibration.mmPerPixel, ambientTemperature, stackup, setHeatmapResult]);
 
   const handleMouseMove = (e: any) => {
     const stageObj = e.target.getStage();
@@ -347,17 +354,14 @@ const CanvasView: React.FC = () => {
           {bgImage && <KonvaImage image={bgImage} listening={false} name="PCB_IMAGE" />}
 
           {calibration.mmPerPixel && imageDimensions && (
-            <HeatmapOverlay width={imageDimensions.width} height={imageDimensions.height} onResult={handleHeatmapResult} />
+            <HeatmapOverlay width={imageDimensions.width} height={imageDimensions.height} />
           )}
 
-          {/* Zones and Boundary using generic PolygonEditor */}
-          {/* Order: Boundary first (bottom), then Zones */}
           {pcbBoundary && <PolygonEditor shape={pcbBoundary} mmToPx={mmToPx} pxToMm={pxToMm} />}
           {zones.filter(z => z.type !== 'pcbBoundary').map(zone => (
             <PolygonEditor key={zone.id} shape={zone} mmToPx={mmToPx} pxToMm={pxToMm} />
           ))}
 
-          {/* Current Drawing Preview */}
           {(mode === 'drawZone' || mode === 'drawBoundary') && drawingPoints.length > 0 && (
               <Group>
                   <Line points={drawingPointsPx} stroke="#3b82f6" strokeWidth={2 / stage.scale} dash={[5, 5]} />
@@ -373,7 +377,6 @@ const CanvasView: React.FC = () => {
               </Group>
           )}
 
-          {/* Components */}
           {components.map((comp) => {
             const pxX = mmToPx(comp.x);
             const pxY = mmToPx(comp.y);
@@ -445,8 +448,7 @@ const CanvasView: React.FC = () => {
         </Layer>
       </Stage>
 
-      {/* DOM Overlays */}
-      <Legend minTemp={heatmapRange.min} maxTemp={heatmapRange.max} />
+      <Legend />
 
       {calibration.mmPerPixel && (
         <div className="absolute bottom-4 right-4 bg-black/80 text-white p-3 rounded text-[10px] font-mono pointer-events-none border border-white/20 backdrop-blur-sm shadow-xl min-w-[150px]">

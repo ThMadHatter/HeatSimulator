@@ -4,14 +4,21 @@ import { Trash2, Settings, Info, Layers, Zap } from 'lucide-react';
 import { estimateBaseConductivity } from '../thermal/utils';
 
 const PropertyPanel: React.FC = () => {
-  const {
-    selection, components, updateComponent, removeComponent,
-    zones, updateZone, removeZone, setSelection,
-    stackup, setStackup,
-    ambientTemperature, setAmbientTemperature,
-    globalMaxTemperature, setGlobalMaxTemperature,
-    heatmapResult
-  } = useStore();
+  const selection = useStore(state => state.selection);
+  const components = useStore(state => state.components);
+  const updateComponent = useStore(state => state.updateComponent);
+  const removeComponent = useStore(state => state.removeComponent);
+  const zones = useStore(state => state.zones);
+  const updateZone = useStore(state => state.updateZone);
+  const removeZone = useStore(state => state.removeZone);
+  const setSelection = useStore(state => state.setSelection);
+  const stackup = useStore(state => state.stackup);
+  const setStackup = useStore(state => state.setStackup);
+  const ambientTemperature = useStore(state => state.ambientTemperature);
+  const setAmbientTemperature = useStore(state => state.setAmbientTemperature);
+  const globalMaxTemperature = useStore(state => state.globalMaxTemperature);
+  const setGlobalMaxTemperature = useStore(state => state.setGlobalMaxTemperature);
+  const heatmapResult = useStore(state => state.heatmapResult);
 
   const selectedComp = useMemo(() => {
     if (selection?.type === 'component') return components.find(c => c.id === selection.id);
@@ -168,7 +175,7 @@ const PropertyPanel: React.FC = () => {
                         <label className="block text-[10px] font-medium text-gray-700">Conductivity (W/mK)</label>
                         <input
                             type="number"
-                            value={selectedZone.conductivity}
+                            value={selectedZone.conductivity ?? 50}
                             onChange={(e) => updateZone(selectedZone.id, { conductivity: parseFloat(e.target.value) || 0 })}
                             className="mt-1 block w-full rounded border-gray-300 shadow-sm sm:text-xs p-1 border"
                         />

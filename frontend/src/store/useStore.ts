@@ -50,10 +50,6 @@ interface State {
   mode: InteractionMode;
   selection: Selection;
 
-  // Backward compatibility
-  selectedComponentId: string | null;
-  selectedZoneId: string | null;
-
   heatmapOpacity: number;
   showGrid: boolean;
   showConductivityMap: boolean;
@@ -90,7 +86,7 @@ interface State {
   setDebugPointerEvents: (enabled: boolean) => void;
 }
 
-export const useStore = create<State>((set, get) => ({
+export const useStore = create<State>((set) => ({
   image: null,
   imageDimensions: null,
   components: [],
@@ -112,8 +108,6 @@ export const useStore = create<State>((set, get) => ({
 
   mode: 'select',
   selection: null,
-  selectedComponentId: null,
-  selectedZoneId: null,
 
   heatmapOpacity: 0.6,
   showGrid: false,
@@ -127,21 +121,15 @@ export const useStore = create<State>((set, get) => ({
     components: [],
     zones: [],
     selection: null,
-    selectedComponentId: null,
-    selectedZoneId: null,
     calibration: { point1: null, point2: null, distanceMm: 0, mmPerPixel: null }
   }),
   setMode: (mode) => set({ mode }),
   setSelection: (selection) => set((state) => {
-    let selectedComponentId = null;
-    let selectedZoneId = null;
-    if (selection?.type === 'component') selectedComponentId = selection.id;
-    if (selection?.type === 'polygon') selectedZoneId = selection.id;
-    if (selection?.type === 'polygonVertex') selectedZoneId = selection.id;
-
-    return { selection, selectedComponentId, selectedZoneId };
+    // Simple equality check to avoid re-renders
+    if (JSON.stringify(state.selection) === JSON.stringify(selection)) return state;
+    return { selection };
   }),
-  clearSelection: () => set({ selection: null, selectedComponentId: null, selectedZoneId: null }),
+  clearSelection: () => set({ selection: null }),
 
   addComponent: (comp) => set((state) => ({ components: [...state.components, comp] })),
   updateComponent: (id, updates) => set((state) => ({
@@ -150,7 +138,6 @@ export const useStore = create<State>((set, get) => ({
   removeComponent: (id) => set((state) => ({
     components: state.components.filter((c) => c.id !== id),
     selection: (state.selection?.type === 'component' && state.selection.id === id) ? null : state.selection,
-    selectedComponentId: state.selectedComponentId === id ? null : state.selectedComponentId,
   })),
 
   addZone: (zone) => set((state) => ({ zones: [...state.zones, zone] })),
@@ -160,7 +147,6 @@ export const useStore = create<State>((set, get) => ({
   removeZone: (id) => set((state) => ({
     zones: state.zones.filter((z) => z.id !== id),
     selection: (state.selection?.id === id) ? null : state.selection,
-    selectedZoneId: state.selectedZoneId === id ? null : state.selectedZoneId,
   })),
 
   setStackup: (updates) => set((state) => ({ stackup: { ...state.stackup, ...updates } })),
@@ -181,8 +167,7 @@ export const useStore = create<State>((set, get) => ({
     let mmPerPixel = null;
     if (state.calibration.point1 && state.calibration.point2) {
       const p1 = state.calibration.point1;
-      const p2 = state.calibration.point2;
-      const distPx = Math.sqrt(Math.pow(p2.x - p1.x, 2) + Math.pow(p2.y - p1.y, 2));
+      const distPx = Math.sqrt(Math.pow(state.calibration.point2.x - p1.x, 2) + Math.pow(state.calibration.point2.y - p1.y, 2));
       mmPerPixel = distance / distPx;
     }
     return { calibration: { ...state.calibration, distanceMm: distance, mmPerPixel } };
@@ -193,8 +178,8 @@ export const useStore = create<State>((set, get) => ({
   setGlobalMaxTemperature: (globalMaxTemperature) => set({ globalMaxTemperature }),
 
   setHeatmapOpacity: (heatmapOpacity) => set({ heatmapOpacity }),
-  setShowGrid: (showGrid: boolean) => set({ showGrid }),
-  setShowConductivityMap: (showConductivityMap: boolean) => set({ showConductivityMap }),
+  setShowGrid: (showGrid) => set({ showGrid }),
+  setShowConductivityMap: (show) => set({ showConductivityMap: show }),
   setHeatmapResult: (heatmapResult) => set({ heatmapResult }),
   setDebugPointerEvents: (debugPointerEvents) => set({ debugPointerEvents }),
 }));

@@ -6,13 +6,14 @@ import { applyColorMap } from '../thermal';
 interface HeatmapOverlayProps {
   width: number;
   height: number;
-  onResult: (minT: number, maxT: number) => void;
 }
 
-const HeatmapOverlay: React.FC<HeatmapOverlayProps> = ({ width, height, onResult }) => {
-  const {
-    heatmapOpacity, ambientTemperature, globalMaxTemperature, heatmapResult, showConductivityMap
-  } = useStore();
+const HeatmapOverlay: React.FC<HeatmapOverlayProps> = ({ width, height }) => {
+  const heatmapOpacity = useStore(state => state.heatmapOpacity);
+  const ambientTemperature = useStore(state => state.ambientTemperature);
+  const globalMaxTemperature = useStore(state => state.globalMaxTemperature);
+  const heatmapResult = useStore(state => state.heatmapResult);
+  const showConductivityMap = useStore(state => state.showConductivityMap);
 
   const [heatmapImg, setHeatmapImg] = useState<HTMLImageElement | null>(null);
 
@@ -44,7 +45,6 @@ const HeatmapOverlay: React.FC<HeatmapOverlayProps> = ({ width, height, onResult
   useEffect(() => {
     if (!data || nx === 0 || ny === 0) {
         setHeatmapImg(null);
-        onResult(ambientTemperature, ambientTemperature + 10);
         return;
     }
 
@@ -69,10 +69,9 @@ const HeatmapOverlay: React.FC<HeatmapOverlayProps> = ({ width, height, onResult
     const image = new Image();
     image.onload = () => {
         setHeatmapImg(image);
-        onResult(displayMin, displayMax);
     };
     image.src = canvas.toDataURL();
-  }, [data, displayMin, displayMax, ambientTemperature, onResult, nx, ny, showConductivityMap]);
+  }, [data, displayMin, displayMax, nx, ny]);
 
   if (!heatmapImg) return null;
 
