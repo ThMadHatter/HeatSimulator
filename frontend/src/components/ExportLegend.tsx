@@ -34,23 +34,22 @@ const ExportLegend: React.FC = () => {
     const exceedsScale = !showConductivityMap && heatmapResult.maxTemp > max;
 
     const steps = 5;
-    const height = 150;
-    const width = 60;
+    const height = 180;
+    const width = 80;
+    // Position at bottom-right of the image area
     const x = imageDimensions.width - width - 20;
-    const y = 20;
+    const y = imageDimensions.height - height - 60;
 
     return (
         <Group x={x} y={y} name="EXPORT_LEGEND">
-            <Rect width={width} height={height + (exceedsScale ? 55 : 40)} fill="white" opacity={0.8} stroke="#ccc" strokeWidth={1} cornerRadius={4} />
-            <Text text={label} fontSize={8} fontStyle="bold" width={width} align="center" y={5} />
+            <Rect width={width} height={height + (exceedsScale ? 65 : 45)} fill="white" opacity={0.9} stroke="#ccc" strokeWidth={1} cornerRadius={6} shadowBlur={5} shadowOpacity={0.2} />
+            <Text text={label} fontSize={10} fontStyle="bold" width={width} align="center" y={8} />
             {exceedsScale && (
-                <Text text="⚠️ Exceeds Scale" fontSize={7} fill="#ef4444" fontStyle="bold" width={width} align="center" y={15} />
+                <Text text="⚠️ Exceeds Scale" fontSize={8} fill="#ef4444" fontStyle="bold" width={width} align="center" y={22} />
             )}
 
-            {/* Gradient replacement using individual rects for simplicity in Konva export if needed,
-                but Konva Rect can have fillLinearGradientStartPoint */}
             <Rect
-                x={10} y={exceedsScale ? 35 : 20} width={15} height={height}
+                x={15} y={exceedsScale ? 40 : 25} width={20} height={height}
                 fillLinearGradientStartPoint={{ x: 0, y: height }}
                 fillLinearGradientEndPoint={{ x: 0, y: 0 }}
                 fillLinearGradientColorStops={[
@@ -67,9 +66,10 @@ const ExportLegend: React.FC = () => {
                     <Text
                         key={i}
                         text={t.toFixed(1)}
-                        fontSize={8}
-                        x={30}
-                        y={(exceedsScale ? 35 : 20) + height - (i / steps * height) - 4}
+                        fontSize={9}
+                        fontStyle="bold"
+                        x={40}
+                        y={(exceedsScale ? 40 : 25) + height - (i / steps * height) - 5}
                     />
                 );
             })}

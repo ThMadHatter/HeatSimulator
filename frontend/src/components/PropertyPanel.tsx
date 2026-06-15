@@ -49,6 +49,9 @@ const PropertyPanel: React.FC = () => {
   const setShowGrid = useStore(state => state.setShowGrid);
   const showConductivityMap = useStore(state => state.showConductivityMap);
   const setShowConductivityMap = useStore(state => state.setShowConductivityMap);
+  const debugPointerEvents = useStore(state => state.debugPointerEvents);
+  const setDebugPointerEvents = useStore(state => state.setDebugPointerEvents);
+  const stageRef = useStore(state => state.stageRef);
 
   const selectedComp = useMemo(() => {
     if (selection?.type === 'component') return components.find(c => c.id === selection.id);
@@ -66,6 +69,20 @@ const PropertyPanel: React.FC = () => {
     if (!selectedComp || !heatmapResult) return null;
     return heatmapResult.junctions.find(j => j.compId === selectedComp.id);
   }, [selectedComp, heatmapResult]);
+
+  const hottestCompInfo = useMemo(() => {
+    if (!heatmapResult) return null;
+    let hottest = null;
+    let maxT = -1;
+    for (const j of heatmapResult.junctions) {
+        const currentT = j.tj ?? j.tPcb;
+        if (currentT > maxT) {
+            maxT = currentT;
+            hottest = components.find(c => c.id === j.compId);
+        }
+    }
+    return hottest ? { name: hottest.name, temp: maxT.toFixed(1) } : null;
+  }, [heatmapResult, components]);
 
   const kXY = useMemo(() => calculateStackupKXY(detailedStackup), [detailedStackup]);
   const kZ = useMemo(() => calculateStackupKZ(detailedStackup), [detailedStackup]);
@@ -253,6 +270,12 @@ const PropertyPanel: React.FC = () => {
                          <div className="grid grid-cols-2 gap-x-2 text-xs">
                             <span className="text-gray-500">Max Temp:</span>
                             <span className="text-right font-mono font-bold text-red-600">{heatmapResult.maxTemp.toFixed(1)}°C</span>
+                            {hottestCompInfo && (
+                                <>
+                                    <span className="text-gray-500">Hottest Comp:</span>
+                                    <span className="text-right font-bold text-red-500">{hottestCompInfo.name}</span>
+                                </>
+                            )}
                             <span className="text-gray-500">Iterations:</span>
                             <span className="text-right font-mono">{heatmapResult.iterations}</span>
                          </div>
@@ -458,6 +481,20 @@ const PropertyPanel: React.FC = () => {
                         onChange={(e) => setShowConductivityMap(e.target.checked)}
                     />
                 </div>
+                <div className="flex items-center justify-between">
+                    <label className="text-xs font-medium text-gray-700">Debug Pointers</label>
+                    <input
+                        type="checkbox"
+                        checked={debugPointerEvents}
+                        onChange={(e) => setDebugPointerEvents(e.target.checked)}
+                    />
+                </div>
+                {heatmapResult && (
+                    <div className="pt-2 border-t border-gray-200 text-[10px] font-mono text-gray-500">
+                        <div>Grid: {heatmapResult.width}x{heatmapResult.height}</div>
+                        <div>Boundary: {zones.find(z => z.type === 'pcbBoundary')?.points.length || 0} pts</div>
+                    </div>
+                )}
             </div>
         </Accordion>
       </div>
@@ -466,9 +503,8 @@ const PropertyPanel: React.FC = () => {
           <button
             className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded flex items-center justify-center gap-2 transition-colors text-sm shadow-md"
             onClick={() => {
-                const stage = (window as any).stage; // Need to expose stage to window or use a ref shared via store/context
-                if (stage) {
-                    const dataURL = stage.toDataURL({ pixelRatio: 2 });
+                if (stageRef) {
+                    const dataURL = stageRef.toDataURL({ pixelRatio: 2 });
                     const link = document.createElement('a');
                     const date = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 16);
                     link.download = `pcb-thermal-heatmap-${date}.png`;

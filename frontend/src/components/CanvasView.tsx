@@ -4,8 +4,6 @@ import { useStore, Component, Selection } from '../store/useStore';
 import HeatmapOverlay from './HeatmapOverlay';
 import SolverGridOverlay from './SolverGridOverlay';
 import ExportLegend from './ExportLegend';
-import DebugPanel from './DebugPanel';
-import Legend from './Legend';
 import { PolygonEditor } from './PolygonEditor';
 import { KonvaEventObject } from 'konva/lib/Node';
 import { computeHeatmap } from '../thermal';
@@ -36,6 +34,7 @@ const CanvasView: React.FC = () => {
   const detailedStackup = useStore(state => state.detailedStackup);
   const heatmapResult = useStore(state => state.heatmapResult);
   const setHeatmapResult = useStore(state => state.setHeatmapResult);
+  const setStageRef = useStore(state => state.setStageRef);
   const debugPointerEvents = useStore(state => state.debugPointerEvents);
 
   const [stage, setStage] = useState({ scale: 1, x: 0, y: 0 });
@@ -152,16 +151,8 @@ const CanvasView: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    const checkStage = () => {
-        if (stageRef.current) {
-            (window as any).stage = stageRef.current;
-        }
-    };
-    checkStage();
-    // Re-check in case Konva initialization is delayed
-    const timer = setTimeout(checkStage, 500);
-    return () => clearTimeout(timer);
-  }, [stageRef]);
+    setStageRef(stageRef.current);
+  }, [stageRef, setStageRef]);
 
   useEffect(() => {
     if (image) {
@@ -551,8 +542,6 @@ const CanvasView: React.FC = () => {
         </Layer>
       </Stage>
 
-      <Legend />
-
       {calibration.mmPerPixel && (
         <div className="absolute bottom-4 right-4 bg-black/80 text-white p-3 rounded text-[10px] font-mono pointer-events-none border border-white/20 backdrop-blur-sm shadow-xl min-w-[150px]">
             <div className="text-blue-400 font-bold mb-1 border-b border-white/10 pb-1">CURSOR INFO</div>
@@ -606,8 +595,6 @@ const CanvasView: React.FC = () => {
               <span className="text-gray-400">Delete:</span> <span>Remove</span>
           </div>
       </div>
-
-      <DebugPanel />
     </div>
   );
 };

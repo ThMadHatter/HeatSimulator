@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { Zone, HeatmapResult, Stackup, PolygonType, BoardStackup, StackupLayer } from '../thermal/types';
+import Konva from 'konva';
 
 export interface Component {
   id: string;
@@ -57,6 +58,7 @@ interface State {
   heatmapResult: HeatmapResult | null;
   manualHeatmapMaxTemperatureC: number | null;
   debugPointerEvents: boolean;
+  stageRef: Konva.Stage | null;
 
   // Actions
   setImage: (image: string | null, width?: number, height?: number) => void;
@@ -89,6 +91,7 @@ interface State {
   setHeatmapResult: (result: HeatmapResult | null) => void;
   setManualHeatmapMaxTemperatureC: (temp: number | null) => void;
   setDebugPointerEvents: (enabled: boolean) => void;
+  setStageRef: (ref: Konva.Stage | null) => void;
 }
 
 export const useStore = create<State>((set) => ({
@@ -128,6 +131,7 @@ export const useStore = create<State>((set) => ({
   heatmapResult: null,
   manualHeatmapMaxTemperatureC: null,
   debugPointerEvents: false,
+  stageRef: null,
 
   setImage: (image, width, height) => set({
     image,
@@ -204,6 +208,7 @@ export const useStore = create<State>((set) => ({
   setHeatmapResult: (heatmapResult) => set({ heatmapResult }),
   setManualHeatmapMaxTemperatureC: (manualHeatmapMaxTemperatureC) => set({ manualHeatmapMaxTemperatureC }),
   setDebugPointerEvents: (debugPointerEvents) => set({ debugPointerEvents }),
+  setStageRef: (stageRef) => set({ stageRef }),
 }));
 
 if (typeof window !== 'undefined') {
