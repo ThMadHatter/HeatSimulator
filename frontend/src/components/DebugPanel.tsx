@@ -1,9 +1,14 @@
 import React, { useMemo } from 'react';
 import { useStore } from '../store/useStore';
-import { computeHeatmap } from '../thermal';
 
 const DebugPanel: React.FC = () => {
-  const { components, boundary, showGrid, setShowGrid, heatmapResult } = useStore();
+  const {
+    components, zones, showGrid, setShowGrid,
+    showConductivityMap, setShowConductivityMap,
+    heatmapResult, debugPointerEvents, setDebugPointerEvents
+  } = useStore();
+
+  const pcbBoundary = zones.find(z => z.type === 'pcbBoundary');
 
   const debugInfo = useMemo(() => {
     if (!heatmapResult) {
@@ -27,10 +32,10 @@ const DebugPanel: React.FC = () => {
       hottestCompId: hottestComp ? hottestComp.id : 'N/A',
       numComponents: components.length,
       gridSize: `${heatmapResult.width}x${heatmapResult.height}`,
-      boundaryPoints: boundary.length,
+      boundaryPoints: pcbBoundary?.points.length || 0,
       iterations: heatmapResult.iterations
     };
-  }, [components, boundary, heatmapResult]);
+  }, [components, pcbBoundary, heatmapResult]);
 
   if (!debugInfo) return null;
 
@@ -46,7 +51,7 @@ const DebugPanel: React.FC = () => {
         <span>Grid:</span> <span className="text-right">{debugInfo.gridSize}</span>
         <span>Iterations:</span> <span className="text-right">{debugInfo.iterations}</span>
       </div>
-      <div className="mt-2 pt-2 border-t border-white/20">
+      <div className="mt-2 pt-2 border-t border-white/20 space-y-1">
         <label className="flex items-center gap-2 cursor-pointer">
           <input
             type="checkbox"
@@ -55,6 +60,24 @@ const DebugPanel: React.FC = () => {
             className="cursor-pointer"
           />
           Show Solver Grid
+        </label>
+        <label className="flex items-center gap-2 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={showConductivityMap}
+            onChange={(e) => setShowConductivityMap(e.target.checked)}
+            className="cursor-pointer"
+          />
+          Show Conductivity Map
+        </label>
+        <label className="flex items-center gap-2 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={debugPointerEvents}
+            onChange={(e) => setDebugPointerEvents(e.target.checked)}
+            className="cursor-pointer"
+          />
+          Debug Pointer Events
         </label>
       </div>
     </div>

@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { Zone, HeatmapResult } from '../thermal/types';
+import { Zone, HeatmapResult, Stackup, PolygonType } from '../thermal/types';
 
 export interface Component {
   id: string;
@@ -21,49 +21,69 @@ export interface Calibration {
   mmPerPixel: number | null;
 }
 
-export type InteractionMode = 'select' | 'calibrate' | 'addComponent' | 'drawBoundary';
+export type InteractionMode =
+  | 'select'
+  | 'pan'
+  | 'calibrate'
+  | 'drawBoundary'
+  | 'editBoundary'
+  | 'drawZone'
+  | 'editZone'
+  | 'addComponent';
+
+export type Selection =
+  | { type: 'component'; id: string }
+  | { type: 'polygon'; shapeType: PolygonType; id: string }
+  | { type: 'polygonVertex'; shapeType: PolygonType; id: string; vertexIndex: number }
+  | null;
 
 interface State {
   image: string | null;
   imageDimensions: { width: number; height: number } | null;
   components: Component[];
   zones: Zone[];
+  stackup: Stackup;
   calibration: Calibration;
-  boundary: { x: number; y: number }[]; // in mm
   ambientTemperature: number; // °C
   globalMaxTemperature: number | null; // °C
 
   mode: InteractionMode;
-  selectedComponentId: string | null;
+  selection: Selection;
+
   heatmapOpacity: number;
   showGrid: boolean;
+  showConductivityMap: boolean;
   heatmapResult: HeatmapResult | null;
+  debugPointerEvents: boolean;
 
   // Actions
   setImage: (image: string | null, width?: number, height?: number) => void;
   setMode: (mode: InteractionMode) => void;
+  setSelection: (selection: Selection) => void;
+  clearSelection: () => void;
+
   addComponent: (comp: Component) => void;
   updateComponent: (id: string, updates: Partial<Component>) => void;
   removeComponent: (id: string) => void;
-  selectComponent: (id: string | null) => void;
+
+  addZone: (zone: Zone) => void;
+  updateZone: (id: string, updates: Partial<Zone>) => void;
+  removeZone: (id: string) => void;
+
+  setStackup: (stackup: Partial<Stackup>) => void;
 
   setCalibrationPoint: (point: { x: number; y: number }) => void;
   setCalibrationDistance: (distance: number) => void;
   resetCalibration: () => void;
-
-  setBoundary: (points: { x: number; y: number }[]) => void;
-  addBoundaryPoint: (point: { x: number; y: number }) => void;
-  insertBoundaryPoint: (index: number, point: { x: number; y: number }) => void;
-  updateBoundaryPoint: (index: number, point: { x: number; y: number }) => void;
-  removeBoundaryPoint: (index: number) => void;
-  clearBoundary: () => void;
 
   setAmbientTemperature: (temp: number) => void;
   setGlobalMaxTemperature: (temp: number | null) => void;
 
   setHeatmapOpacity: (opacity: number) => void;
   setShowGrid: (showGrid: boolean) => void;
+  setShowConductivityMap: (show: boolean) => void;
   setHeatmapResult: (result: HeatmapResult | null) => void;
+  setDebugPointerEvents: (enabled: boolean) => void;
 }
 
 export const useStore = create<State>((set) => ({
@@ -71,40 +91,65 @@ export const useStore = create<State>((set) => ({
   imageDimensions: null,
   components: [],
   zones: [],
+  stackup: {
+    boardThicknessMm: 1.6,
+    layerCount: 2,
+    copperOzPerLayer: 1,
+    estimatedCopperCoveragePercent: 80,
+  },
   calibration: {
     point1: null,
     point2: null,
     distanceMm: 0,
     mmPerPixel: null,
   },
-  boundary: [],
   ambientTemperature: 25,
   globalMaxTemperature: null,
 
   mode: 'select',
-  selectedComponentId: null,
+  selection: null,
+
   heatmapOpacity: 0.6,
   showGrid: false,
+  showConductivityMap: false,
   heatmapResult: null,
+  debugPointerEvents: false,
 
   setImage: (image, width, height) => set({
     image,
     imageDimensions: width && height ? { width, height } : null,
     components: [],
     zones: [],
-    boundary: [],
+    selection: null,
     calibration: { point1: null, point2: null, distanceMm: 0, mmPerPixel: null }
   }),
   setMode: (mode) => set({ mode }),
+  setSelection: (selection) => set((state) => {
+    // Simple equality check to avoid re-renders
+    if (JSON.stringify(state.selection) === JSON.stringify(selection)) return state;
+    return { selection };
+  }),
+  clearSelection: () => set({ selection: null }),
+
   addComponent: (comp) => set((state) => ({ components: [...state.components, comp] })),
   updateComponent: (id, updates) => set((state) => ({
     components: state.components.map((c) => (c.id === id ? { ...c, ...updates } : c)),
   })),
   removeComponent: (id) => set((state) => ({
     components: state.components.filter((c) => c.id !== id),
-    selectedComponentId: state.selectedComponentId === id ? null : state.selectedComponentId,
+    selection: (state.selection?.type === 'component' && state.selection.id === id) ? null : state.selection,
   })),
-  selectComponent: (id) => set({ selectedComponentId: id }),
+
+  addZone: (zone) => set((state) => ({ zones: [...state.zones, zone] })),
+  updateZone: (id, updates) => set((state) => ({
+    zones: state.zones.map((z) => (z.id === id ? { ...z, ...updates } : z)),
+  })),
+  removeZone: (id) => set((state) => ({
+    zones: state.zones.filter((z) => z.id !== id),
+    selection: (state.selection?.id === id) ? null : state.selection,
+  })),
+
+  setStackup: (updates) => set((state) => ({ stackup: { ...state.stackup, ...updates } })),
 
   setCalibrationPoint: (point) => set((state) => {
     if (!state.calibration.point1) {
@@ -122,35 +167,21 @@ export const useStore = create<State>((set) => ({
     let mmPerPixel = null;
     if (state.calibration.point1 && state.calibration.point2) {
       const p1 = state.calibration.point1;
-      const p2 = state.calibration.point2;
-      const distPx = Math.sqrt(Math.pow(p2.x - p1.x, 2) + Math.pow(p2.y - p1.y, 2));
+      const distPx = Math.sqrt(Math.pow(state.calibration.point2.x - p1.x, 2) + Math.pow(state.calibration.point2.y - p1.y, 2));
       mmPerPixel = distance / distPx;
     }
     return { calibration: { ...state.calibration, distanceMm: distance, mmPerPixel } };
   }),
   resetCalibration: () => set({ calibration: { point1: null, point2: null, distanceMm: 0, mmPerPixel: null } }),
 
-  setBoundary: (boundary) => set({ boundary }),
-  addBoundaryPoint: (point) => set((state) => ({ boundary: [...state.boundary, point] })),
-  insertBoundaryPoint: (index, point) => set((state) => {
-    const newBoundary = [...state.boundary];
-    newBoundary.splice(index, 0, point);
-    return { boundary: newBoundary };
-  }),
-  updateBoundaryPoint: (index, point) => set((state) => ({
-    boundary: state.boundary.map((p, i) => (i === index ? point : p)),
-  })),
-  removeBoundaryPoint: (index) => set((state) => ({
-    boundary: state.boundary.filter((_, i) => i !== index),
-  })),
-  clearBoundary: () => set({ boundary: [] }),
-
   setAmbientTemperature: (ambientTemperature) => set({ ambientTemperature }),
   setGlobalMaxTemperature: (globalMaxTemperature) => set({ globalMaxTemperature }),
 
   setHeatmapOpacity: (heatmapOpacity) => set({ heatmapOpacity }),
-  setShowGrid: (showGrid: boolean) => set({ showGrid }),
+  setShowGrid: (showGrid) => set({ showGrid }),
+  setShowConductivityMap: (show) => set({ showConductivityMap: show }),
   setHeatmapResult: (heatmapResult) => set({ heatmapResult }),
+  setDebugPointerEvents: (debugPointerEvents) => set({ debugPointerEvents }),
 }));
 
 if (typeof window !== 'undefined') {

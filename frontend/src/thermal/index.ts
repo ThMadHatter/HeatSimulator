@@ -1,5 +1,5 @@
 import { Component } from '../store/useStore';
-import { Point, HeatmapResult } from './types';
+import { Point, HeatmapResult, Stackup } from './types';
 import { solveSteadyState } from './solver';
 import { applyColorMap } from './colorMap';
 
@@ -15,7 +15,9 @@ export const computeHeatmap = (
     heightMm: number,
     boundary: Point[],
     ambientTemp: number,
-    resolution: number = 150
+    resolution: number = 150,
+    stackup?: Stackup,
+    debug: boolean = false
 ): HeatmapResult => {
-    return solveSteadyState(components, zones, widthMm, heightMm, boundary, ambientTemp, resolution);
+    return solveSteadyState(components, zones, widthMm, heightMm, boundary, ambientTemp, resolution, stackup, debug);
 };

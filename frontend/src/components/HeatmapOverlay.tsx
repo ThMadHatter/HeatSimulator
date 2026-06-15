@@ -1,36 +1,50 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import { Image as KonvaImage } from 'react-konva';
 import { useStore } from '../store/useStore';
-import { computeHeatmap, applyColorMap } from '../thermal';
+import { applyColorMap } from '../thermal';
 
 interface HeatmapOverlayProps {
   width: number;
   height: number;
-  onResult: (minT: number, maxT: number) => void;
 }
 
-const HeatmapOverlay: React.FC<HeatmapOverlayProps> = ({ width, height, onResult }) => {
-  const {
-    heatmapOpacity, ambientTemperature, globalMaxTemperature, heatmapResult
-  } = useStore();
+const HeatmapOverlay: React.FC<HeatmapOverlayProps> = ({ width, height }) => {
+  const heatmapOpacity = useStore(state => state.heatmapOpacity);
+  const ambientTemperature = useStore(state => state.ambientTemperature);
+  const globalMaxTemperature = useStore(state => state.globalMaxTemperature);
+  const heatmapResult = useStore(state => state.heatmapResult);
+  const showConductivityMap = useStore(state => state.showConductivityMap);
 
   const [heatmapImg, setHeatmapImg] = useState<HTMLImageElement | null>(null);
 
-  const { data, displayMinT, displayMaxT, nx, ny } = useMemo(() => {
+  const { data, displayMin, displayMax, nx, ny } = useMemo(() => {
     if (!heatmapResult || width <= 0 || height <= 0) {
-        return { data: null, displayMinT: ambientTemperature, displayMaxT: ambientTemperature + 10, nx: 0, ny: 0 };
+        return { data: null, displayMin: ambientTemperature, displayMax: ambientTemperature + 10, nx: 0, ny: 0 };
+    }
+
+    if (showConductivityMap) {
+        let minK = Infinity;
+        let maxK = -Infinity;
+        for (let i = 0; i < heatmapResult.kGrid.length; i++) {
+            if (heatmapResult.kGrid[i] < minK) minK = heatmapResult.kGrid[i];
+            if (heatmapResult.kGrid[i] > maxK) maxK = heatmapResult.kGrid[i];
+        }
+        if (minK === maxK) {
+            minK = 0.3;
+            maxK = 50;
+        }
+        return { data: heatmapResult.kGrid, displayMin: minK, displayMax: maxK, nx: heatmapResult.width, ny: heatmapResult.height };
     }
 
     const displayMaxT = globalMaxTemperature !== null ? globalMaxTemperature : heatmapResult.maxTemp;
     const displayMinT = heatmapResult.minTemp;
 
-    return { data: heatmapResult.data, displayMinT, displayMaxT, nx: heatmapResult.width, ny: heatmapResult.height };
-  }, [heatmapResult, ambientTemperature, globalMaxTemperature, width, height]);
+    return { data: heatmapResult.data, displayMin: displayMinT, displayMax: displayMaxT, nx: heatmapResult.width, ny: heatmapResult.height };
+  }, [heatmapResult, ambientTemperature, globalMaxTemperature, width, height, showConductivityMap]);
 
   useEffect(() => {
     if (!data || nx === 0 || ny === 0) {
         setHeatmapImg(null);
-        onResult(ambientTemperature, ambientTemperature + 10);
         return;
     }
 
@@ -42,8 +56,9 @@ const HeatmapOverlay: React.FC<HeatmapOverlayProps> = ({ width, height, onResult
 
     const imageData = ctx.createImageData(nx, ny);
     for (let i = 0; i < data.length; i++) {
-        const temp = data[i];
-        const [r, g, b] = applyColorMap(temp, displayMinT, displayMaxT);
+        const val = data[i];
+        let r, g, b;
+        [r, g, b] = applyColorMap(val, displayMin, displayMax);
         imageData.data[i * 4] = r;
         imageData.data[i * 4 + 1] = g;
         imageData.data[i * 4 + 2] = b;
@@ -54,10 +69,9 @@ const HeatmapOverlay: React.FC<HeatmapOverlayProps> = ({ width, height, onResult
     const image = new Image();
     image.onload = () => {
         setHeatmapImg(image);
-        onResult(displayMinT, displayMaxT);
     };
     image.src = canvas.toDataURL();
-  }, [data, displayMinT, displayMaxT, ambientTemperature, onResult, nx, ny]);
+  }, [data, displayMin, displayMax, nx, ny]);
 
   if (!heatmapImg) return null;
 

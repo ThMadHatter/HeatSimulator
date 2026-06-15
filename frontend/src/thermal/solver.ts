@@ -1,6 +1,6 @@
 import { Component } from '../store/useStore';
-import { Point, HeatmapResult, JunctionData, Zone } from './types';
-import { isPointInPolygon } from './utils';
+import { Point, HeatmapResult, JunctionData, Zone, Stackup } from './types';
+import { isPointInPolygon, estimateBaseConductivity } from './utils';
 
 export function solveSteadyState(
     components: Component[],
@@ -9,7 +9,9 @@ export function solveSteadyState(
     heightMm: number,
     boundary: Point[],
     ambientTemp: number,
-    resolution: number = 150
+    resolution: number = 150,
+    stackup?: Stackup,
+    debug: boolean = false
 ): HeatmapResult {
     // 0. Input Validation
     if (widthMm <= 0 || heightMm <= 0) throw new Error("Invalid board dimensions");
@@ -34,13 +36,45 @@ export function solveSteadyState(
     let T = new Float32Array(size).fill(ambientTemp);
     const Q = new Float32Array(size).fill(0);
     const isInside = new Uint8Array(size).fill(1);
+    const kGrid = new Float32Array(size);
 
-    // Physical Constants (Realistic PCB values)
-    const k = 25.0; // W/mK
+    // Physical Constants
+    const baseK = stackup ? estimateBaseConductivity(stackup) : 25.0;
+    kGrid.fill(baseK);
+
     const h = 15.0; // W/m²K
     const dxM = dx / 1000; // dx in meters
+    const thicknessM = (stackup?.boardThicknessMm || 1.6) / 1000;
 
-    // 2. Initialize Heat Sources & Component Copper Spreading
+    // 1. Build kGrid from zones
+    for (const zone of zones) {
+        if (!zone.enabled || zone.points.length < 3 || zone.type !== 'conductivityZone') continue;
+
+        const minX = Math.min(...zone.points.map(p => p.x));
+        const maxX = Math.max(...zone.points.map(p => p.x));
+        const minY = Math.min(...zone.points.map(p => p.y));
+        const maxY = Math.max(...zone.points.map(p => p.y));
+
+        const startX = Math.max(0, Math.floor(minX / dx));
+        const endX = Math.min(nx - 1, Math.floor(maxX / dx));
+        const startY = Math.max(0, Math.floor(minY / dx));
+        const endY = Math.min(ny - 1, Math.floor(maxY / dx));
+
+        for (let j = startY; j <= endY; j++) {
+            for (let i = startX; i <= endX; i++) {
+                const x = i * dx;
+                const y = j * dx;
+                if (isPointInPolygon({ x, y }, zone.points)) {
+                    kGrid[j * nx + i] = zone.conductivity ?? 50.0;
+                }
+            }
+        }
+    }
+
+    // 2. Initialize Heat Sources
+    let totalInjectedPower = 0;
+    const componentCells: Record<string, number> = {};
+
     for (const comp of components) {
         const area = comp.width * comp.height || 1;
         const powerPerM2 = comp.power / (area / 1000000);
@@ -50,14 +84,27 @@ export function solveSteadyState(
         const startY = Math.max(0, Math.floor((comp.y - comp.height / 2) / dx));
         const endY = Math.min(ny - 1, Math.floor((comp.y + comp.height / 2) / dx));
 
+        let cellsCount = 0;
         for (let j = startY; j <= endY; j++) {
             for (let i = startX; i <= endX; i++) {
                 Q[j * nx + i] += powerPerM2;
+                cellsCount++;
             }
         }
+
+        if (cellsCount === 0) {
+            const i = Math.max(0, Math.min(nx - 1, Math.floor(comp.x / dx)));
+            const j = Math.max(0, Math.min(ny - 1, Math.floor(comp.y / dx)));
+            const cellAreaM2 = dxM * dxM;
+            Q[j * nx + i] += comp.power / cellAreaM2;
+            cellsCount = 1;
+        }
+
+        componentCells[comp.id] = cellsCount;
+        totalInjectedPower += comp.power;
     }
 
-    // 2. Pre-calculate PCB mask
+    // 3. Pre-calculate PCB mask
     if (boundary && boundary.length >= 3) {
         for (let j = 0; j < ny; j++) {
             for (let i = 0; i < nx; i++) {
@@ -70,16 +117,17 @@ export function solveSteadyState(
         }
     }
 
-    // 4. Gauss-Seidel Solver
+    // 4. Variable-k Gauss-Seidel Solver
     const maxIterations = 1000;
     const tolerance = 0.001;
     let iterations = 0;
 
-    const thicknessM = 0.0016; // Standard PCB thickness 1.6mm
-    const invDx2 = 1 / (dxM * dxM);
-    const alpha = k * thicknessM * invDx2;
-    const beta = 2 * h; // Convection on both sides (top and bottom)
-    const denom = 4 * alpha + beta;
+    const beta = 2 * h; // Convection on both sides
+
+    const harmonicMean = (a: number, b: number) => {
+        if (a <= 0 || b <= 0) return 0;
+        return (2 * a * b) / (a + b);
+    };
 
     for (let iter = 0; iter < maxIterations; iter++) {
         iterations = iter + 1;
@@ -94,16 +142,24 @@ export function solveSteadyState(
                     continue;
                 }
 
-                const t_left  = i > 0      ? T[idx - 1]  : ambientTemp;
-                const t_right = i < nx - 1 ? T[idx + 1]  : ambientTemp;
-                const t_up    = j > 0      ? T[idx - nx] : ambientTemp;
-                const t_down  = j < ny - 1 ? T[idx + nx] : ambientTemp;
+                const k = kGrid[idx];
 
-                // Energy balance for cell:
-                // conduction_in + heat_generation - convection_out = 0
-                // (k*t/dx^2) * (sum(T_neighbors) - 4*T) + Q_density - 2*h*(T - T_amb) = 0
-                // T * (4*alpha + beta) = alpha * sum(T_neighbors) + Q_density + beta * T_amb
-                const newT = (alpha * (t_left + t_right + t_up + t_down) + Q[idx] + beta * ambientTemp) / denom;
+                const kW = i > 0      ? harmonicMean(k, kGrid[idx - 1])  : k;
+                const kE = i < nx - 1 ? harmonicMean(k, kGrid[idx + 1])  : k;
+                const kN = j > 0      ? harmonicMean(k, kGrid[idx - nx]) : k;
+                const kS = j < ny - 1 ? harmonicMean(k, kGrid[idx + nx]) : k;
+
+                const tW = i > 0      ? T[idx - 1]  : ambientTemp;
+                const tE = i < nx - 1 ? T[idx + 1]  : ambientTemp;
+                const tN = j > 0      ? T[idx - nx] : ambientTemp;
+                const tS = j < ny - 1 ? T[idx + nx] : ambientTemp;
+
+                const termConduction = (kE * tE + kW * tW + kN * tN + kS * tS) * thicknessM;
+                const termGeneration = Q[idx] * dxM * dxM;
+                const termConvection = beta * ambientTemp * dxM * dxM;
+                const denom = (kE + kW + kN + kS) * thicknessM + beta * dxM * dxM;
+
+                const newT = (termConduction + termGeneration + termConvection) / denom;
 
                 const diff = Math.abs(newT - T[idx]);
                 if (diff > maxDiff) maxDiff = diff;
@@ -115,9 +171,8 @@ export function solveSteadyState(
         if (maxDiff < tolerance) break;
     }
 
-    // 4. Compute Engineering Metrics
+    // 5. Compute Engineering Metrics
     const junctions: JunctionData[] = components.map(comp => {
-        // Find grid cells inside component footprint
         const startX = Math.max(0, Math.floor((comp.x - comp.width / 2) / dx));
         const endX = Math.min(nx - 1, Math.floor((comp.x + comp.width / 2) / dx));
         const startY = Math.max(0, Math.floor((comp.y - comp.height / 2) / dx));
@@ -131,7 +186,15 @@ export function solveSteadyState(
                 count++;
             }
         }
-        const tPcb = count > 0 ? sumT / count : ambientTemp;
+
+        if (count === 0) {
+            const i = Math.max(0, Math.min(nx - 1, Math.floor(comp.x / dx)));
+            const j = Math.max(0, Math.min(ny - 1, Math.floor(comp.y / dx)));
+            sumT = T[j * nx + i];
+            count = 1;
+        }
+
+        const tPcb = sumT / count;
         const rThetaPcb = comp.power > 0 ? (tPcb - ambientTemp) / comp.power : 0;
 
         let tj: number | null = null;
@@ -142,7 +205,7 @@ export function solveSteadyState(
         } else if (comp.thetaJA !== undefined && comp.thetaJA !== null) {
             tj = ambientTemp + comp.power * comp.thetaJA;
         } else {
-            warning = "Missing ThetaJC/ThetaJA";
+            warning = "Max temperature required";
         }
 
         let margin: number | null = null;
@@ -153,6 +216,10 @@ export function solveSteadyState(
             margin = comp.maxTemperature - tj;
             ratingPercent = (tj / comp.maxTemperature) * 100;
             isOverLimit = tj > comp.maxTemperature;
+        }
+
+        if (debug) {
+            console.log(`Comp ${comp.name}: P=${comp.power}W, Cells=${componentCells[comp.id]}, Tpcb=${tPcb.toFixed(2)}°C, RθPCB=${rThetaPcb.toFixed(4)} K/W`);
         }
 
         return {
@@ -174,8 +241,13 @@ export function solveSteadyState(
 
     const junctionMax = junctions.reduce((max, j) => Math.max(max, j.tj || 0), ambientTemp);
 
+    if (debug) {
+        console.log(`Solver: nx=${nx}, ny=${ny}, dx=${dx.toFixed(4)}mm, totalPower=${totalInjectedPower}W, maxBoardT=${maxBoardT.toFixed(2)}°C, iterations=${iterations}`);
+    }
+
     return {
         data: T,
+        kGrid,
         width: nx,
         height: ny,
         minTemp: ambientTemp,
