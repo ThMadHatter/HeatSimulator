@@ -2,9 +2,10 @@ import { Component } from '../store/useStore';
 import { Point, HeatmapResult, Stackup, BoardStackup } from './types';
 import { solveSteadyState } from './solver';
 import { applyColorMap } from './colorMap';
+import { estimateBaseConductivity } from './utils';
 
 export * from './types';
-export { applyColorMap };
+export { applyColorMap, estimateBaseConductivity };
 
 import { Zone } from './types';
 

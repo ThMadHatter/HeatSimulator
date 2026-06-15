@@ -362,12 +362,25 @@ const CanvasView: React.FC = () => {
         {/* Transparent background for stage dragging */}
         <Layer
             draggable={isSpacePressed || mode === 'pan'}
-            onDragEnd={(e) => setStage({ ...stage, x: e.target.x(), y: e.target.y() })}
+            onDragEnd={(e) => {
+              if (e.target === e.currentTarget) {
+                setStage({ ...stage, x: e.target.x(), y: e.target.y() });
+              }
+            }}
             x={stage.x}
             y={stage.y}
             scaleX={stage.scale}
             scaleY={stage.scale}
         >
+          {/* Background to catch drag events for panning */}
+          {imageDimensions && (
+            <Rect
+              width={imageDimensions.width}
+              height={imageDimensions.height}
+              fill="transparent"
+              listening={isSpacePressed || mode === 'pan'}
+            />
+          )}
           {bgImage && <KonvaImage image={bgImage} listening={false} name="PCB_IMAGE" />}
 
           {calibration.mmPerPixel && imageDimensions && (
@@ -380,8 +393,10 @@ const CanvasView: React.FC = () => {
             <Group name="HOTSPOTS" listening={false}>
                {/* Max Board Temp Hotspot */}
                {(() => {
-                  const x = (heatmapResult.maxTempIdx % heatmapResult.width) * (imageDimensions!.width / heatmapResult.width);
-                  const y = Math.floor(heatmapResult.maxTempIdx / heatmapResult.width) * (imageDimensions!.height / heatmapResult.height);
+                  const cellWidthPx = imageDimensions!.width / heatmapResult.width;
+                  const cellHeightPx = imageDimensions!.height / heatmapResult.height;
+                  const x = ((heatmapResult.maxTempIdx % heatmapResult.width) + 0.5) * cellWidthPx;
+                  const y = (Math.floor(heatmapResult.maxTempIdx / heatmapResult.width) + 0.5) * cellHeightPx;
                   return (
                     <Group x={x} y={y}>
                       <Circle radius={10 / stage.scale} stroke="#ef4444" strokeWidth={2 / stage.scale} dash={[2, 2]} />

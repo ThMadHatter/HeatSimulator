@@ -63,8 +63,8 @@ export function solveSteadyState(
 
         for (let j = startY; j <= endY; j++) {
             for (let i = startX; i <= endX; i++) {
-                const x = i * dx;
-                const y = j * dx;
+                const x = (i + 0.5) * dx;
+                const y = (j + 0.5) * dx;
                 if (isPointInPolygon({ x, y }, zone.points)) {
                     kGrid[j * nx + i] = zone.conductivity ?? 50.0;
                 }
@@ -77,31 +77,34 @@ export function solveSteadyState(
     const componentCells: Record<string, number> = {};
 
     for (const comp of components) {
-        const area = comp.width * comp.height || 1;
-        const powerPerM2 = comp.power / (area / 1000000);
-
         const startX = Math.max(0, Math.floor((comp.x - comp.width / 2) / dx));
         const endX = Math.min(nx - 1, Math.floor((comp.x + comp.width / 2) / dx));
         const startY = Math.max(0, Math.floor((comp.y - comp.height / 2) / dx));
         const endY = Math.min(ny - 1, Math.floor((comp.y + comp.height / 2) / dx));
 
-        let cellsCount = 0;
+        let cells: number[] = [];
         for (let j = startY; j <= endY; j++) {
             for (let i = startX; i <= endX; i++) {
-                Q[j * nx + i] += powerPerM2;
-                cellsCount++;
+                cells.push(j * nx + i);
             }
         }
 
-        if (cellsCount === 0) {
+        if (cells.length === 0) {
             const i = Math.max(0, Math.min(nx - 1, Math.floor(comp.x / dx)));
             const j = Math.max(0, Math.min(ny - 1, Math.floor(comp.y / dx)));
-            const cellAreaM2 = dxM * dxM;
-            Q[j * nx + i] += comp.power / cellAreaM2;
-            cellsCount = 1;
+            cells.push(j * nx + i);
         }
 
-        componentCells[comp.id] = cellsCount;
+        // Power normalization: Distribute exactly comp.power across all mapped cells
+        const powerPerCell = comp.power / cells.length;
+        const cellAreaM2 = dxM * dxM;
+        const qPerCell = powerPerCell / cellAreaM2;
+
+        for (const idx of cells) {
+            Q[idx] += qPerCell;
+        }
+
+        componentCells[comp.id] = cells.length;
         totalInjectedPower += comp.power;
     }
 
@@ -109,8 +112,8 @@ export function solveSteadyState(
     if (boundary && boundary.length >= 3) {
         for (let j = 0; j < ny; j++) {
             for (let i = 0; i < nx; i++) {
-                const x = i * dx;
-                const y = j * dx;
+                const x = (i + 0.5) * dx;
+                const y = (j + 0.5) * dx;
                 if (!isPointInPolygon({ x, y }, boundary)) {
                     isInside[j * nx + i] = 0;
                 }
