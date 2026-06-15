@@ -150,9 +150,6 @@ const CanvasView: React.FC = () => {
     return () => { anim.stop(); };
   }, []);
 
-  useEffect(() => {
-    setStageRef(stageRef.current);
-  }, [stageRef, setStageRef]);
 
   useEffect(() => {
     if (image) {
@@ -315,17 +312,22 @@ const CanvasView: React.FC = () => {
     return 'default';
   };
 
+  const stageWidth = window.innerWidth - 64 - 256;
+  const stageHeight = window.innerHeight - 64;
+
   return (
     <div className="flex-1 bg-gray-300 relative overflow-hidden" style={{ cursor: getCursor() }}>
       <Stage
-        width={window.innerWidth - 64 - 256}
-        height={window.innerHeight - 64}
-        scaleX={stage.scale}
-        scaleY={stage.scale}
-        x={stage.x}
-        y={stage.y}
+        width={stageWidth}
+        height={stageHeight}
         onWheel={handleWheel}
         onClick={handleStageClick}
+        ref={(node) => {
+            if (node && node !== stageRef.current) {
+                (stageRef as any).current = node;
+                setStageRef(node);
+            }
+        }}
         onDblClick={(e) => {
             if ((mode === 'drawZone' || mode === 'drawBoundary') && drawingPoints.length >= 3) {
               const type: PolygonType = mode === 'drawZone' ? 'conductivityZone' : 'pcbBoundary';
@@ -352,12 +354,20 @@ const CanvasView: React.FC = () => {
         }}
         onMouseMove={handleMouseMove}
         onDragEnd={(e) => {
-          if (e.target === stageRef.current) setStage({ ...stage, x: e.target.x(), y: e.target.y() });
+          if (e.target.attrs.name === 'STAGE_DRAG_RECT' || e.target === stageRef.current) {
+            setStage({ ...stage, x: e.target.x(), y: e.target.y() });
+          }
         }}
-        draggable={isSpacePressed || mode === 'pan'}
-        ref={stageRef}
       >
-        <Layer>
+        {/* Transparent background for stage dragging */}
+        <Layer
+            draggable={isSpacePressed || mode === 'pan'}
+            onDragEnd={(e) => setStage({ ...stage, x: e.target.x(), y: e.target.y() })}
+            x={stage.x}
+            y={stage.y}
+            scaleX={stage.scale}
+            scaleY={stage.scale}
+        >
           {bgImage && <KonvaImage image={bgImage} listening={false} name="PCB_IMAGE" />}
 
           {calibration.mmPerPixel && imageDimensions && (
@@ -365,7 +375,6 @@ const CanvasView: React.FC = () => {
           )}
 
           <SolverGridOverlay />
-          <ExportLegend />
 
           {heatmapResult && calibration.mmPerPixel && (
             <Group name="HOTSPOTS" listening={false}>
@@ -539,6 +548,11 @@ const CanvasView: React.FC = () => {
               </Group>
             );
           })}
+        </Layer>
+
+        {/* Fixed overlays layer (not scaled/panned) */}
+        <Layer listening={false}>
+            <ExportLegend />
         </Layer>
       </Stage>
 

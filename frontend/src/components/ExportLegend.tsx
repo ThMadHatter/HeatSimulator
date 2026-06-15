@@ -36,9 +36,11 @@ const ExportLegend: React.FC = () => {
     const steps = 5;
     const height = 180;
     const width = 80;
-    // Position at bottom-right of the image area
-    const x = imageDimensions.width - width - 20;
-    const y = imageDimensions.height - height - 60;
+    // Position at bottom-right of the stage (viewport)
+    const stageWidth = window.innerWidth - 64 - 256;
+    const stageHeight = window.innerHeight - 64;
+    const x = stageWidth - width - 20;
+    const y = stageHeight - height - 40;
 
     return (
         <Group x={x} y={y} name="EXPORT_LEGEND">
