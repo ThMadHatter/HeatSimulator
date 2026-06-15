@@ -33,6 +33,7 @@ const CanvasView: React.FC = () => {
   const stackup = useStore(state => state.stackup);
   const detailedStackup = useStore(state => state.detailedStackup);
   const heatmapResult = useStore(state => state.heatmapResult);
+  const heatmapViewMode = useStore(state => state.heatmapViewMode);
   const setHeatmapResult = useStore(state => state.setHeatmapResult);
   const setStageRef = useStore(state => state.setStageRef);
   const debugPointerEvents = useStore(state => state.debugPointerEvents);
@@ -42,7 +43,7 @@ const CanvasView: React.FC = () => {
   const [drawingPoints, setDrawingPoints] = useState<Point[]>([]);
   const [cursorPos, setCursorPos] = useState<Point | null>(null);
 
-  const [mousePos, setMousePos] = useState({ x: 0, y: 0, mmX: 0, mmY: 0, temp: 0, k: 0 });
+  const [mousePos, setMousePos] = useState({ x: 0, y: 0, mmX: 0, mmY: 0, temp: 0, tTop: 0, tBottom: 0, k: 0 });
   const [bgImage, setBgImage] = useState<HTMLImageElement | null>(null);
   const stageRef = useRef<Konva.Stage>(null);
   const [opacity, setOpacity] = useState(1);
@@ -188,6 +189,8 @@ const CanvasView: React.FC = () => {
     if (!pointer) return;
 
     let temp = ambientTemperature;
+    let tTop = ambientTemperature;
+    let tBottom = ambientTemperature;
     let k = 0;
     let mmX = 0;
     let mmY = 0;
@@ -202,13 +205,19 @@ const CanvasView: React.FC = () => {
             const gridY = Math.floor(mmY / dx);
             if (gridX >= 0 && gridX < heatmapResult.width && gridY >= 0 && gridY < heatmapResult.height) {
                 const idx = gridY * heatmapResult.width + gridX;
-                temp = heatmapResult.data[idx];
+                tTop = heatmapResult.TTop[idx];
+                tBottom = heatmapResult.TBottom[idx];
                 k = heatmapResult.kGrid[idx];
+
+                if (heatmapViewMode === 'top') temp = tTop;
+                else if (heatmapViewMode === 'bottom') temp = tBottom;
+                else if (heatmapViewMode === 'difference') temp = tTop - tBottom;
+                else temp = Math.max(tTop, tBottom);
             }
         }
     }
 
-    setMousePos({ x: pointer.x, y: pointer.y, mmX, mmY, temp, k });
+    setMousePos({ x: pointer.x, y: pointer.y, mmX, mmY, temp, tTop, tBottom, k });
     setCursorPos({ x: mmX, y: mmY });
   };
 
@@ -395,16 +404,38 @@ const CanvasView: React.FC = () => {
                {(() => {
                   const cellWidthPx = imageDimensions!.width / heatmapResult.width;
                   const cellHeightPx = imageDimensions!.height / heatmapResult.height;
-                  const x = ((heatmapResult.maxTempIdx % heatmapResult.width) + 0.5) * cellWidthPx;
-                  const y = (Math.floor(heatmapResult.maxTempIdx / heatmapResult.width) + 0.5) * cellHeightPx;
-                  return (
-                    <Group x={x} y={y}>
-                      <Circle radius={10 / stage.scale} stroke="#ef4444" strokeWidth={2 / stage.scale} dash={[2, 2]} />
-                      <Line points={[-15 / stage.scale, 0, 15 / stage.scale, 0]} stroke="#ef4444" strokeWidth={1 / stage.scale} />
-                      <Line points={[0, -15 / stage.scale, 0, 15 / stage.scale]} stroke="#ef4444" strokeWidth={1 / stage.scale} />
-                      <Text text={`MAX BOARD: ${heatmapResult.data[heatmapResult.maxTempIdx].toFixed(1)}°C`} fill="#ef4444" fontSize={10 / stage.scale} fontStyle="bold" y={12 / stage.scale} x={-40 / stage.scale} align="center" width={80 / stage.scale} shadowBlur={2} shadowColor="black" />
-                    </Group>
-                  );
+
+                  let hotspots: { idx: number, label: string, color: string }[] = [];
+
+                  if (heatmapViewMode === 'top') {
+                    hotspots.push({ idx: heatmapResult.maxTempIdxTop, label: `MAX TOP: ${heatmapResult.TTop[heatmapResult.maxTempIdxTop].toFixed(1)}°C`, color: "#ef4444" });
+                  } else if (heatmapViewMode === 'bottom') {
+                    hotspots.push({ idx: heatmapResult.maxTempIdxBottom, label: `MAX BOT: ${heatmapResult.TBottom[heatmapResult.maxTempIdxBottom].toFixed(1)}°C`, color: "#ef4444" });
+                  } else if (heatmapViewMode === 'max') {
+                    hotspots.push({ idx: heatmapResult.maxTempIdx, label: `MAX BOARD: ${heatmapResult.maxTemp.toFixed(1)}°C`, color: "#ef4444" });
+                  } else if (heatmapViewMode === 'difference') {
+                    let minIdx = 0, maxIdx = 0, minVal = Infinity, maxVal = -Infinity;
+                    for (let i = 0; i < heatmapResult.TTop.length; i++) {
+                        const d = heatmapResult.TTop[i] - heatmapResult.TBottom[i];
+                        if (d < minVal) { minVal = d; minIdx = i; }
+                        if (d > maxVal) { maxVal = d; maxIdx = i; }
+                    }
+                    hotspots.push({ idx: maxIdx, label: `MAX Δ: +${maxVal.toFixed(1)}°C`, color: "#ef4444" });
+                    hotspots.push({ idx: minIdx, label: `MIN Δ: ${minVal.toFixed(1)}°C`, color: "#3b82f6" });
+                  }
+
+                  return hotspots.map((hs, i) => {
+                      const x = ((hs.idx % heatmapResult.width) + 0.5) * cellWidthPx;
+                      const y = (Math.floor(hs.idx / heatmapResult.width) + 0.5) * cellHeightPx;
+                      return (
+                        <Group key={`hotspot-${i}`} x={x} y={y}>
+                          <Circle radius={10 / stage.scale} stroke={hs.color} strokeWidth={2 / stage.scale} dash={[2, 2]} />
+                          <Line points={[-15 / stage.scale, 0, 15 / stage.scale, 0]} stroke={hs.color} strokeWidth={1 / stage.scale} />
+                          <Line points={[0, -15 / stage.scale, 0, 15 / stage.scale]} stroke={hs.color} strokeWidth={1 / stage.scale} />
+                          <Text text={hs.label} fill={hs.color} fontSize={10 / stage.scale} fontStyle="bold" y={12 / stage.scale} x={-40 / stage.scale} align="center" width={80 / stage.scale} shadowBlur={2} shadowColor="black" />
+                        </Group>
+                      );
+                  });
                })()}
 
                {/* Over-limit components */}
@@ -510,7 +541,8 @@ const CanvasView: React.FC = () => {
                 else if (junction.ratingPercent && junction.ratingPercent > 70) statusColor = "#f59e0b";
             }
 
-            const label = `${comp.name}\nTj: ${junction?.tj?.toFixed(1) ?? 'N/A'}°C\nTpcb: ${junction?.tPcb.toFixed(1)}°C\nRp: ${junction?.rThetaPcb.toFixed(2)} K/W`;
+            const sideLabel = (comp.side || 'top').toUpperCase()[0];
+            const label = `[${sideLabel}] ${comp.name}\nTj: ${junction?.tj?.toFixed(1) ?? 'N/A'}°C\nTpcb: ${junction?.tPcb.toFixed(1)}°C\nRp: ${junction?.rThetaPcb.toFixed(2)} K/W`;
 
             return (
               <Group
@@ -553,7 +585,8 @@ const CanvasView: React.FC = () => {
                 }}
               >
                 <Rect x={-pxW/2} y={-pxH/2} width={pxW} height={pxH} fill="transparent"
-                    stroke={isSelected ? "#3b82f6" : statusColor} strokeWidth={isSelected ? 4 / stage.scale : 2 / stage.scale} opacity={0.8} />
+                    stroke={isSelected ? "#3b82f6" : statusColor} strokeWidth={isSelected ? 4 / stage.scale : 2 / stage.scale} opacity={0.8}
+                    dash={comp.side === 'bottom' ? [4, 2] : undefined} />
                 <Circle radius={8 / stage.scale} fill={statusColor} opacity={(junction?.isOverLimit || (junction?.ratingPercent && junction.ratingPercent > 90)) ? opacity : 1}
                   stroke="white" strokeWidth={2 / stage.scale} shadowBlur={junction?.isOverLimit ? 10 : 0} shadowColor="red" />
                 <Text text={label} fontSize={9 / stage.scale} fill="white" fontStyle="bold" y={pxH/2 + 5 / stage.scale} align="center" width={120 / stage.scale} x={-60 / stage.scale} shadowColor="black" shadowBlur={2} shadowOffset={{x:1, y:1}} shadowOpacity={1} listening={false} />
@@ -577,7 +610,9 @@ const CanvasView: React.FC = () => {
             <div className="grid grid-cols-2 gap-x-2">
                 <span className="text-gray-400">POS X:</span> <span>{mousePos.mmX.toFixed(1)} mm</span>
                 <span className="text-gray-400">POS Y:</span> <span>{mousePos.mmY.toFixed(1)} mm</span>
-                <span className="text-gray-400">TEMP:</span> <span className={mousePos.temp > 80 ? "text-red-400" : "text-green-400"}>{mousePos.temp.toFixed(1)} °C</span>
+                <span className="text-gray-400">TOP:</span> <span className="text-orange-300">{mousePos.tTop.toFixed(1)} °C</span>
+                <span className="text-gray-400">BOT:</span> <span className="text-blue-300">{mousePos.tBottom.toFixed(1)} °C</span>
+                <span className="text-gray-400">VIEW:</span> <span className={Math.abs(mousePos.temp) > 80 ? "text-red-400" : "text-green-400"}>{mousePos.temp.toFixed(1)} {heatmapViewMode === 'difference' ? 'Δ°C' : '°C'}</span>
                 <span className="text-gray-400">k:</span> <span className="text-blue-300">{mousePos.k.toFixed(1)} W/mK</span>
             </div>
         </div>

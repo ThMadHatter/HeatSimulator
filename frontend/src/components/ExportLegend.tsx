@@ -12,8 +12,9 @@ const ExportLegend: React.FC = () => {
     const ambientTemperature = useStore(state => state.ambientTemperature);
     const stackup = useStore(state => state.stackup);
     const detailedStackup = useStore(state => state.detailedStackup);
+    const heatmapViewMode = useStore(state => state.heatmapViewMode);
 
-    const { min, max, label, displayMin, displayMax } = useMemo(() => {
+    const { min, max, label, displayMin, displayMax, colorMode } = useMemo(() => {
         if (showConductivityMap && heatmapResult) {
             let minK = Infinity;
             let maxK = -Infinity;
@@ -22,15 +23,27 @@ const ExportLegend: React.FC = () => {
                 if (heatmapResult.kGrid[i] > maxK) maxK = heatmapResult.kGrid[i];
             }
             if (minK === maxK) { minK = 0.3; maxK = 50; }
-            return { min: minK, max: maxK, displayMin: minK, displayMax: maxK, label: "Cond (W/mK)" };
+            return { min: minK, max: maxK, displayMin: minK, displayMax: maxK, label: "Cond (W/mK)", colorMode: 'standard' as const };
         }
         if (heatmapResult) {
+            if (heatmapViewMode === 'difference') {
+                let maxDelta = 0;
+                for (let i = 0; i < heatmapResult.TTop.length; i++) {
+                    const d = Math.abs(heatmapResult.TTop[i] - heatmapResult.TBottom[i]);
+                    if (d > maxDelta) maxDelta = d;
+                }
+                return { min: -maxDelta, max: maxDelta, displayMin: -maxDelta, displayMax: maxDelta, label: "Delta T (°C)", colorMode: 'diverging' as const };
+            }
+
             const displayMaxT = manualHeatmapMaxTemperatureC !== null ? manualHeatmapMaxTemperatureC :
                               (globalMaxTemperature !== null ? globalMaxTemperature : heatmapResult.maxTemp);
-            return { min: heatmapResult.minTemp, max: displayMaxT, displayMin: heatmapResult.minTemp, displayMax: displayMaxT, label: "Temp (°C)" };
+            const viewLabel = heatmapViewMode === 'top' ? 'Top T (°C)' :
+                             heatmapViewMode === 'bottom' ? 'Bot T (°C)' :
+                             heatmapViewMode === 'max' ? 'Max T/B (°C)' : 'Temp (°C)';
+            return { min: heatmapResult.minTemp, max: displayMaxT, displayMin: heatmapResult.minTemp, displayMax: displayMaxT, label: viewLabel, colorMode: 'standard' as const };
         }
-        return { min: 25, max: 35, displayMin: 25, displayMax: 35, label: "Temp (°C)" };
-    }, [heatmapResult, showConductivityMap, globalMaxTemperature, manualHeatmapMaxTemperatureC]);
+        return { min: 25, max: 35, displayMin: 25, displayMax: 35, label: "Temp (°C)", colorMode: 'standard' as const };
+    }, [heatmapResult, showConductivityMap, globalMaxTemperature, manualHeatmapMaxTemperatureC, heatmapViewMode]);
 
     if (!imageDimensions || !heatmapResult) return null;
 
@@ -60,9 +73,9 @@ const ExportLegend: React.FC = () => {
                 fillLinearGradientStartPoint={{ x: 0, y: height }}
                 fillLinearGradientEndPoint={{ x: 0, y: 0 }}
                 fillLinearGradientColorStops={[
-                    0, `rgb(${applyColorMap(displayMin, displayMin, displayMax).join(',')})`,
-                    0.5, `rgb(${applyColorMap(displayMin + (displayMax-displayMin)*0.5, displayMin, displayMax).join(',')})`,
-                    1, `rgb(${applyColorMap(displayMax, displayMin, displayMax).join(',')})`
+                    0, `rgb(${applyColorMap(displayMin, displayMin, displayMax, colorMode === 'diverging' ? 'diverging' : undefined).join(',')})`,
+                    0.5, `rgb(${applyColorMap(displayMin + (displayMax-displayMin)*0.5, displayMin, displayMax, colorMode === 'diverging' ? 'diverging' : undefined).join(',')})`,
+                    1, `rgb(${applyColorMap(displayMax, displayMin, displayMax, colorMode === 'diverging' ? 'diverging' : undefined).join(',')})`
                 ]}
                 cornerRadius={2}
             />
@@ -84,7 +97,7 @@ const ExportLegend: React.FC = () => {
             <Group y={height + (exceedsScale ? 50 : 35)}>
                 <Rect x={5} width={width - 10} height={1} fill="#eee" />
                 <Text
-                    text={`Tamb: ${ambientTemperature}°C\nBase k: ${baseK.toFixed(2)} W/mK\nMode: ${stackup.baseConductivityMode}\n\n${timestamp}`}
+                    text={`Tamb: ${ambientTemperature}°C\nBase k: ${baseK.toFixed(2)} W/mK\nMode: ${stackup.baseConductivityMode}\nView: ${heatmapViewMode.toUpperCase()}\n\n${timestamp}`}
                     fontSize={7}
                     lineHeight={1.2}
                     x={8}

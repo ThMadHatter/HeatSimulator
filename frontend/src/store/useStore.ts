@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { Zone, HeatmapResult, Stackup, PolygonType, BoardStackup, StackupLayer } from '../thermal/types';
+import { Zone, HeatmapResult, Stackup, PolygonType, BoardStackup, StackupLayer, HeatmapViewMode } from '../thermal/types';
 import Konva from 'konva';
 
 export interface Component {
@@ -13,6 +13,7 @@ export interface Component {
   thetaJA?: number; // °C/W
   thetaJC?: number; // °C/W
   maxTemperature?: number; // °C
+  side?: 'top' | 'bottom';
 }
 
 export interface Calibration {
@@ -56,6 +57,7 @@ interface State {
   showGrid: boolean;
   showConductivityMap: boolean;
   heatmapResult: HeatmapResult | null;
+  heatmapViewMode: HeatmapViewMode;
   manualHeatmapMaxTemperatureC: number | null;
   debugPointerEvents: boolean;
   stageRef: Konva.Stage | null;
@@ -89,6 +91,7 @@ interface State {
   setShowGrid: (showGrid: boolean) => void;
   setShowConductivityMap: (show: boolean) => void;
   setHeatmapResult: (result: HeatmapResult | null) => void;
+  setHeatmapViewMode: (mode: HeatmapViewMode) => void;
   setManualHeatmapMaxTemperatureC: (temp: number | null) => void;
   setDebugPointerEvents: (enabled: boolean) => void;
   setStageRef: (ref: Konva.Stage | null) => void;
@@ -129,6 +132,7 @@ export const useStore = create<State>((set) => ({
   showGrid: false,
   showConductivityMap: false,
   heatmapResult: null,
+  heatmapViewMode: 'top',
   manualHeatmapMaxTemperatureC: null,
   debugPointerEvents: false,
   stageRef: null,
@@ -206,6 +210,7 @@ export const useStore = create<State>((set) => ({
   setShowGrid: (showGrid) => set({ showGrid }),
   setShowConductivityMap: (show) => set({ showConductivityMap: show }),
   setHeatmapResult: (heatmapResult) => set({ heatmapResult }),
+  setHeatmapViewMode: (heatmapViewMode) => set({ heatmapViewMode }),
   setManualHeatmapMaxTemperatureC: (manualHeatmapMaxTemperatureC) => set({ manualHeatmapMaxTemperatureC }),
   setDebugPointerEvents: (debugPointerEvents) => set({ debugPointerEvents }),
   setStageRef: (stageRef) => set({ stageRef }),

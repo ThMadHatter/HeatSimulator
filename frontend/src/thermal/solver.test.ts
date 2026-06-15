@@ -143,6 +143,46 @@ describe('solveSteadyState', () => {
         const r2 = solveSteadyState([c2], [], 100, 100, boundary, ambientTemp, 50);
         expect(r2.maxTemp).toBeGreaterThan(r1.maxTemp);
     });
+
+    it('injects heat into the correct side', () => {
+        const topComp: Component = { id: 'c1', name: 'U1', x: 50, y: 50, width: 10, height: 10, power: 1.0, side: 'top' };
+        const result = solveSteadyState([topComp], [], 100, 100, boundary, ambientTemp, 50);
+
+        const idx = Math.floor(50 / (100/50)) * 50 + Math.floor(50 / (100/50)); // Center index approx
+        expect(result.TTop[idx]).toBeGreaterThan(result.TBottom[idx]);
+
+        const botComp: Component = { id: 'c2', name: 'U2', x: 50, y: 50, width: 10, height: 10, power: 1.0, side: 'bottom' };
+        const resultBot = solveSteadyState([botComp], [], 100, 100, boundary, ambientTemp, 50);
+        expect(resultBot.TBottom[idx]).toBeGreaterThan(resultBot.TTop[idx]);
+    });
+
+    it('couples top and bottom sides', () => {
+        const topComp: Component = { id: 'c1', name: 'U1', x: 50, y: 50, width: 10, height: 10, power: 1.0, side: 'top' };
+        const result = solveSteadyState([topComp], [], 100, 100, boundary, ambientTemp, 50);
+
+        const idx = Math.floor(50 / (100/50)) * 50 + Math.floor(50 / (100/50));
+        expect(result.TBottom[idx]).toBeGreaterThan(ambientTemp); // Coupling effect
+    });
+
+    it('metrics use side-appropriate temperature', () => {
+        const topComp: Component = { id: 'c1', name: 'U1', x: 50, y: 50, width: 10, height: 10, power: 1.0, side: 'top' };
+        const botComp: Component = { id: 'c2', name: 'U2', x: 20, y: 20, width: 10, height: 10, power: 1.0, side: 'bottom' };
+
+        const result = solveSteadyState([topComp, botComp], [], 100, 100, boundary, ambientTemp, 50);
+
+        const jTop = result.junctions.find(j => j.compId === 'c1')!;
+        const jBot = result.junctions.find(j => j.compId === 'c2')!;
+
+        const idxTop = Math.floor(50 / (100/50)) * 50 + Math.floor(50 / (100/50));
+        const idxBot = Math.floor(20 / (100/50)) * 50 + Math.floor(20 / (100/50));
+
+        expect(Math.abs(jTop.tPcb - result.TTop[idxTop])).toBeLessThan(2);
+        expect(Math.abs(jBot.tPcb - result.TBottom[idxBot])).toBeLessThan(2);
+
+        // Ensure it's definitely NOT using the wrong side
+        expect(Math.abs(jTop.tPcb - result.TBottom[idxTop])).toBeGreaterThan(0.1);
+        expect(Math.abs(jBot.tPcb - result.TTop[idxBot])).toBeGreaterThan(0.1);
+    });
 });
 
 describe('utils interaction logic', () => {

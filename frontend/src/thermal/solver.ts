@@ -1,6 +1,6 @@
 import { Component } from '../store/useStore';
 import { Point, HeatmapResult, JunctionData, Zone, Stackup, BoardStackup } from './types';
-import { isPointInPolygon, estimateBaseConductivity } from './utils';
+import { isPointInPolygon, estimateBaseConductivity, calculateStackupKZ } from './utils';
 
 export function solveSteadyState(
     components: Component[],
@@ -34,8 +34,11 @@ export function solveSteadyState(
     const ny = Math.ceil(heightMm / dx);
     const size = nx * ny;
 
-    let T = new Float32Array(size).fill(ambientTemp);
-    const Q = new Float32Array(size).fill(0);
+    let TTop = new Float32Array(size).fill(ambientTemp);
+    let TBottom = new Float32Array(size).fill(ambientTemp);
+    const QTop = new Float32Array(size).fill(0);
+    const QBottom = new Float32Array(size).fill(0);
+
     const isInside = new Uint8Array(size).fill(1);
     const kGrid = new Float32Array(size);
 
@@ -46,6 +49,10 @@ export function solveSteadyState(
     const h = 15.0; // W/m²K
     const dxM = dx / 1000; // dx in meters
     const thicknessM = (stackup?.boardThicknessMm || 1.6) / 1000;
+
+    const kZValue = (stackup?.baseConductivityMode === 'stackup' && detailedStackup)
+        ? calculateStackupKZ(detailedStackup)
+        : 0.35;
 
     // 1. Build kGrid from zones
     for (const zone of zones) {
@@ -101,7 +108,11 @@ export function solveSteadyState(
         const qPerCell = powerPerCell / cellAreaM2;
 
         for (const idx of cells) {
-            Q[idx] += qPerCell;
+            if (comp.side === 'bottom') {
+                QBottom[idx] += qPerCell;
+            } else {
+                QTop[idx] += qPerCell;
+            }
         }
 
         componentCells[comp.id] = cells.length;
@@ -121,12 +132,13 @@ export function solveSteadyState(
         }
     }
 
-    // 4. Variable-k Gauss-Seidel Solver
+    // 4. Variable-k Gauss-Seidel Solver (Coupled Two-Grid)
     const maxIterations = 1000;
     const tolerance = 0.001;
     let iterations = 0;
 
-    const beta = 2 * h; // Convection on both sides
+    const beta = h; // Convection on each side
+    const gZ = (kZValue * dxM * dxM) / thicknessM;
 
     const harmonicMean = (a: number, b: number) => {
         if (a <= 0 || b <= 0) return 0;
@@ -142,7 +154,8 @@ export function solveSteadyState(
                 const idx = j * nx + i;
 
                 if (isInside[idx] === 0) {
-                    T[idx] = ambientTemp;
+                    TTop[idx] = ambientTemp;
+                    TBottom[idx] = ambientTemp;
                     continue;
                 }
 
@@ -153,22 +166,43 @@ export function solveSteadyState(
                 const kN = j > 0      ? harmonicMean(k, kGrid[idx - nx]) : k;
                 const kS = j < ny - 1 ? harmonicMean(k, kGrid[idx + nx]) : k;
 
-                const tW = i > 0      ? T[idx - 1]  : ambientTemp;
-                const tE = i < nx - 1 ? T[idx + 1]  : ambientTemp;
-                const tN = j > 0      ? T[idx - nx] : ambientTemp;
-                const tS = j < ny - 1 ? T[idx + nx] : ambientTemp;
+                // Update Top
+                {
+                    const tW = i > 0      ? TTop[idx - 1]  : ambientTemp;
+                    const tE = i < nx - 1 ? TTop[idx + 1]  : ambientTemp;
+                    const tN = j > 0      ? TTop[idx - nx] : ambientTemp;
+                    const tS = j < ny - 1 ? TTop[idx + nx] : ambientTemp;
 
-                const termConduction = (kE * tE + kW * tW + kN * tN + kS * tS) * thicknessM;
-                const termGeneration = Q[idx] * dxM * dxM;
-                const termConvection = beta * ambientTemp * dxM * dxM;
-                const denom = (kE + kW + kN + kS) * thicknessM + beta * dxM * dxM;
+                    const termConduction = (kE * tE + kW * tW + kN * tN + kS * tS) * thicknessM;
+                    const termGeneration = QTop[idx] * dxM * dxM;
+                    const termConvection = beta * ambientTemp * dxM * dxM;
+                    const termCoupling = gZ * TBottom[idx];
+                    const denom = (kE + kW + kN + kS) * thicknessM + (beta * dxM * dxM) + gZ;
 
-                const newT = (termConduction + termGeneration + termConvection) / denom;
+                    const newT = (termConduction + termGeneration + termConvection + termCoupling) / denom;
+                    const diff = Math.abs(newT - TTop[idx]);
+                    if (diff > maxDiff) maxDiff = diff;
+                    TTop[idx] = newT;
+                }
 
-                const diff = Math.abs(newT - T[idx]);
-                if (diff > maxDiff) maxDiff = diff;
+                // Update Bottom
+                {
+                    const tW = i > 0      ? TBottom[idx - 1]  : ambientTemp;
+                    const tE = i < nx - 1 ? TBottom[idx + 1]  : ambientTemp;
+                    const tN = j > 0      ? TBottom[idx - nx] : ambientTemp;
+                    const tS = j < ny - 1 ? TBottom[idx + nx] : ambientTemp;
 
-                T[idx] = newT;
+                    const termConduction = (kE * tE + kW * tW + kN * tN + kS * tS) * thicknessM;
+                    const termGeneration = QBottom[idx] * dxM * dxM;
+                    const termConvection = beta * ambientTemp * dxM * dxM;
+                    const termCoupling = gZ * TTop[idx];
+                    const denom = (kE + kW + kN + kS) * thicknessM + (beta * dxM * dxM) + gZ;
+
+                    const newT = (termConduction + termGeneration + termConvection + termCoupling) / denom;
+                    const diff = Math.abs(newT - TBottom[idx]);
+                    if (diff > maxDiff) maxDiff = diff;
+                    TBottom[idx] = newT;
+                }
             }
         }
 
@@ -184,9 +218,11 @@ export function solveSteadyState(
 
         let sumT = 0;
         let count = 0;
+        const TGrid = comp.side === 'bottom' ? TBottom : TTop;
+
         for (let j = startY; j <= endY; j++) {
             for (let i = startX; i <= endX; i++) {
-                sumT += T[j * nx + i];
+                sumT += TGrid[j * nx + i];
                 count++;
             }
         }
@@ -194,7 +230,7 @@ export function solveSteadyState(
         if (count === 0) {
             const i = Math.max(0, Math.min(nx - 1, Math.floor(comp.x / dx)));
             const j = Math.max(0, Math.min(ny - 1, Math.floor(comp.y / dx)));
-            sumT = T[j * nx + i];
+            sumT = TGrid[j * nx + i];
             count = 1;
         }
 
@@ -240,10 +276,24 @@ export function solveSteadyState(
 
     let maxBoardT = ambientTemp;
     let maxTempIdx = 0;
+    let maxTempIdxTop = 0;
+    let maxTempIdxBottom = 0;
+    let maxTTop = ambientTemp;
+    let maxTBottom = ambientTemp;
+
     for (let i = 0; i < size; i++) {
-        if (T[i] > maxBoardT) {
-            maxBoardT = T[i];
+        const tMax = Math.max(TTop[i], TBottom[i]);
+        if (tMax > maxBoardT) {
+            maxBoardT = tMax;
             maxTempIdx = i;
+        }
+        if (TTop[i] > maxTTop) {
+            maxTTop = TTop[i];
+            maxTempIdxTop = i;
+        }
+        if (TBottom[i] > maxTBottom) {
+            maxTBottom = TBottom[i];
+            maxTempIdxBottom = i;
         }
     }
 
@@ -253,14 +303,24 @@ export function solveSteadyState(
         console.log(`Solver: nx=${nx}, ny=${ny}, dx=${dx.toFixed(4)}mm, totalPower=${totalInjectedPower}W, maxBoardT=${maxBoardT.toFixed(2)}°C, iterations=${iterations}`);
     }
 
+    // Default data is max of top and bottom
+    const dataMax = new Float32Array(size);
+    for (let i = 0; i < size; i++) {
+        dataMax[i] = Math.max(TTop[i], TBottom[i]);
+    }
+
     return {
-        data: T,
+        data: dataMax,
+        TTop,
+        TBottom,
         kGrid,
         width: nx,
         height: ny,
         minTemp: ambientTemp,
         maxTemp: Math.max(maxBoardT, junctionMax),
         maxTempIdx,
+        maxTempIdxTop,
+        maxTempIdxBottom,
         junctions,
         iterations
     };

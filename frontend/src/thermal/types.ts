@@ -52,14 +52,20 @@ export interface Stackup {
     baseConductivityMode: "manual" | "stackup";
 }
 
+export type HeatmapViewMode = 'top' | 'bottom' | 'max' | 'difference';
+
 export interface HeatmapResult {
     data: Float32Array;
+    TTop: Float32Array;
+    TBottom: Float32Array;
     kGrid: Float32Array;
     width: number;
     height: number;
     minTemp: number;
     maxTemp: number;
     maxTempIdx: number;
+    maxTempIdxTop: number;
+    maxTempIdxBottom: number;
     junctions: JunctionData[];
     iterations: number;
 }
