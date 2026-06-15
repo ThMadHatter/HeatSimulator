@@ -4,6 +4,8 @@ import { applyColorMap } from '../thermal';
 
 const Legend: React.FC = () => {
     const heatmapResult = useStore(state => state.heatmapResult);
+    const globalMaxTemperature = useStore(state => state.globalMaxTemperature);
+    const manualHeatmapMaxTemperatureC = useStore(state => state.manualHeatmapMaxTemperatureC);
     const showConductivityMap = useStore(state => state.showConductivityMap);
 
     const { min, max, label } = useMemo(() => {
@@ -18,7 +20,9 @@ const Legend: React.FC = () => {
             return { min: minK, max: maxK, label: "Cond (W/mK)" };
         }
         if (heatmapResult) {
-            return { min: heatmapResult.minTemp, max: heatmapResult.maxTemp, label: "Temp (°C)" };
+            const displayMaxT = manualHeatmapMaxTemperatureC !== null ? manualHeatmapMaxTemperatureC :
+                              (globalMaxTemperature !== null ? globalMaxTemperature : heatmapResult.maxTemp);
+            return { min: heatmapResult.minTemp, max: displayMaxT, label: "Temp (°C)" };
         }
         return { min: 25, max: 35, label: "Temp (°C)" };
     }, [heatmapResult, showConductivityMap]);
@@ -35,9 +39,16 @@ const Legend: React.FC = () => {
         });
     }
 
+    const exceedsScale = heatmapResult && !showConductivityMap && heatmapResult.maxTemp > max;
+
     return (
         <div className="absolute right-4 top-40 bg-white/80 backdrop-blur-sm p-3 rounded shadow-lg border border-gray-300 flex flex-col gap-2 z-10">
             <div className="text-[10px] font-bold text-gray-700 uppercase text-center mb-1">{label}</div>
+            {exceedsScale && (
+                <div className="text-[8px] text-red-600 bg-red-50 p-1 rounded border border-red-200 text-center animate-pulse">
+                    ⚠️ Exceeds Scale
+                </div>
+            )}
             <div className="flex gap-3">
                 <div
                     className="w-4 h-32 rounded"

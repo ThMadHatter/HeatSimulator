@@ -2,6 +2,8 @@ import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react'
 import { Stage, Layer, Image as KonvaImage, Circle, Line, Text, Group, Rect } from 'react-konva';
 import { useStore, Component, Selection } from '../store/useStore';
 import HeatmapOverlay from './HeatmapOverlay';
+import SolverGridOverlay from './SolverGridOverlay';
+import ExportLegend from './ExportLegend';
 import DebugPanel from './DebugPanel';
 import Legend from './Legend';
 import { PolygonEditor } from './PolygonEditor';
@@ -31,6 +33,7 @@ const CanvasView: React.FC = () => {
   const updateZone = useStore(state => state.updateZone);
   const removeZone = useStore(state => state.removeZone);
   const stackup = useStore(state => state.stackup);
+  const detailedStackup = useStore(state => state.detailedStackup);
   const heatmapResult = useStore(state => state.heatmapResult);
   const setHeatmapResult = useStore(state => state.setHeatmapResult);
   const debugPointerEvents = useStore(state => state.debugPointerEvents);
@@ -149,6 +152,12 @@ const CanvasView: React.FC = () => {
   }, []);
 
   useEffect(() => {
+    if (stageRef.current) {
+        (window as any).stage = stageRef.current;
+    }
+  }, []);
+
+  useEffect(() => {
     if (image) {
       const img = new window.Image();
       img.src = image;
@@ -172,7 +181,8 @@ const CanvasView: React.FC = () => {
         boundaryPoints,
         ambientTemperature,
         150,
-        stackup
+        stackup,
+        detailedStackup
     );
     setHeatmapResult(result);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -357,6 +367,93 @@ const CanvasView: React.FC = () => {
             <HeatmapOverlay width={imageDimensions.width} height={imageDimensions.height} />
           )}
 
+          <SolverGridOverlay />
+          <ExportLegend />
+
+          {heatmapResult && calibration.mmPerPixel && (
+            <Group name="HOTSPOTS" listening={false}>
+               {/* Max Board Temp Hotspot */}
+               {(() => {
+                  const x = (heatmapResult.maxTempIdx % heatmapResult.width) * (imageDimensions!.width / heatmapResult.width);
+                  const y = Math.floor(heatmapResult.maxTempIdx / heatmapResult.width) * (imageDimensions!.height / heatmapResult.height);
+                  return (
+                    <Group x={x} y={y}>
+                      <Circle radius={10 / stage.scale} stroke="#ef4444" strokeWidth={2 / stage.scale} dash={[2, 2]} />
+                      <Line points={[-15 / stage.scale, 0, 15 / stage.scale, 0]} stroke="#ef4444" strokeWidth={1 / stage.scale} />
+                      <Line points={[0, -15 / stage.scale, 0, 15 / stage.scale]} stroke="#ef4444" strokeWidth={1 / stage.scale} />
+                      <Text text={`MAX BOARD: ${heatmapResult.data[heatmapResult.maxTempIdx].toFixed(1)}°C`} fill="#ef4444" fontSize={10 / stage.scale} fontStyle="bold" y={12 / stage.scale} x={-40 / stage.scale} align="center" width={80 / stage.scale} shadowBlur={2} shadowColor="black" />
+                    </Group>
+                  );
+               })()}
+
+               {/* Over-limit components */}
+               {heatmapResult.junctions.filter(j => j.isOverLimit || (j.ratingPercent && j.ratingPercent > 90)).map(j => {
+                  const comp = components.find(c => c.id === j.compId);
+                  if (!comp) return null;
+                  return (
+                    <Group key={`hotspot-${comp.id}`} x={mmToPx(comp.x)} y={mmToPx(comp.y)}>
+                        <Rect
+                          x={-mmToPx(comp.width)/2 - 5 / stage.scale}
+                          y={-mmToPx(comp.height)/2 - 5 / stage.scale}
+                          width={mmToPx(comp.width) + 10 / stage.scale}
+                          height={mmToPx(comp.height) + 10 / stage.scale}
+                          stroke="#ef4444"
+                          strokeWidth={3 / stage.scale}
+                        />
+                    </Group>
+                  );
+               })}
+            </Group>
+          )}
+
+          {mode === 'calibrate' && (
+            <Group listening={true}>
+              {calibration.point1 && (
+                <Circle
+                  x={calibration.point1.x}
+                  y={calibration.point1.y}
+                  radius={6 / stage.scale}
+                  fill="#ef4444"
+                  stroke="white"
+                  strokeWidth={2 / stage.scale}
+                />
+              )}
+              {calibration.point2 && (
+                <Circle
+                  x={calibration.point2.x}
+                  y={calibration.point2.y}
+                  radius={6 / stage.scale}
+                  fill="#ef4444"
+                  stroke="white"
+                  strokeWidth={2 / stage.scale}
+                />
+              )}
+              {calibration.point1 && calibration.point2 && (
+                <Line
+                  points={[
+                    calibration.point1.x, calibration.point1.y,
+                    calibration.point2.x, calibration.point2.y
+                  ]}
+                  stroke="#ef4444"
+                  strokeWidth={3 / stage.scale}
+                  dash={[5, 5]}
+                />
+              )}
+              {calibration.point1 && !calibration.point2 && mousePos && (
+                <Line
+                  points={[
+                    calibration.point1.x, calibration.point1.y,
+                    mousePos.x, mousePos.y
+                  ]}
+                  stroke="#ef4444"
+                  strokeWidth={2 / stage.scale}
+                  opacity={0.5}
+                  dash={[5, 5]}
+                />
+              )}
+            </Group>
+          )}
+
           {pcbBoundary && <PolygonEditor shape={pcbBoundary} mmToPx={mmToPx} pxToMm={pxToMm} />}
           {zones.filter(z => z.type !== 'pcbBoundary').map(zone => (
             <PolygonEditor key={zone.id} shape={zone} mmToPx={mmToPx} pxToMm={pxToMm} />
@@ -447,8 +544,6 @@ const CanvasView: React.FC = () => {
           })}
         </Layer>
       </Stage>
-
-      <Legend />
 
       {calibration.mmPerPixel && (
         <div className="absolute bottom-4 right-4 bg-black/80 text-white p-3 rounded text-[10px] font-mono pointer-events-none border border-white/20 backdrop-blur-sm shadow-xl min-w-[150px]">

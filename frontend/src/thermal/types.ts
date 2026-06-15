@@ -30,11 +30,26 @@ export interface Zone {
     deletable: boolean;
 }
 
+export interface StackupLayer {
+    id: string;
+    name: string;
+    type: "copper" | "dielectric" | "core" | "prepreg" | "soldermask";
+    thicknessUm: number;
+    conductivityWmK: number;
+    copperCoveragePercent?: number;
+}
+
+export interface BoardStackup {
+    layers: StackupLayer[];
+}
+
 export interface Stackup {
     boardThicknessMm: number;
     layerCount: number;
     copperOzPerLayer: number;
     estimatedCopperCoveragePercent: number;
+    // New fields
+    baseConductivityMode: "manual" | "stackup";
 }
 
 export interface HeatmapResult {
@@ -44,6 +59,7 @@ export interface HeatmapResult {
     height: number;
     minTemp: number;
     maxTemp: number;
+    maxTempIdx: number;
     junctions: JunctionData[];
     iterations: number;
 }

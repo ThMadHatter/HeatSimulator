@@ -1,5 +1,5 @@
 import { Component } from '../store/useStore';
-import { Point, HeatmapResult, JunctionData, Zone, Stackup } from './types';
+import { Point, HeatmapResult, JunctionData, Zone, Stackup, BoardStackup } from './types';
 import { isPointInPolygon, estimateBaseConductivity } from './utils';
 
 export function solveSteadyState(
@@ -11,6 +11,7 @@ export function solveSteadyState(
     ambientTemp: number,
     resolution: number = 150,
     stackup?: Stackup,
+    detailedStackup?: BoardStackup,
     debug: boolean = false
 ): HeatmapResult {
     // 0. Input Validation
@@ -39,7 +40,7 @@ export function solveSteadyState(
     const kGrid = new Float32Array(size);
 
     // Physical Constants
-    const baseK = stackup ? estimateBaseConductivity(stackup) : 25.0;
+    const baseK = stackup ? estimateBaseConductivity(stackup, detailedStackup) : 25.0;
     kGrid.fill(baseK);
 
     const h = 15.0; // W/m²K
@@ -235,8 +236,12 @@ export function solveSteadyState(
     });
 
     let maxBoardT = ambientTemp;
+    let maxTempIdx = 0;
     for (let i = 0; i < size; i++) {
-        if (T[i] > maxBoardT) maxBoardT = T[i];
+        if (T[i] > maxBoardT) {
+            maxBoardT = T[i];
+            maxTempIdx = i;
+        }
     }
 
     const junctionMax = junctions.reduce((max, j) => Math.max(max, j.tj || 0), ambientTemp);
@@ -252,6 +257,7 @@ export function solveSteadyState(
         height: ny,
         minTemp: ambientTemp,
         maxTemp: Math.max(maxBoardT, junctionMax),
+        maxTempIdx,
         junctions,
         iterations
     };

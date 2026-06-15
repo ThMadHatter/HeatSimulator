@@ -12,6 +12,7 @@ const HeatmapOverlay: React.FC<HeatmapOverlayProps> = ({ width, height }) => {
   const heatmapOpacity = useStore(state => state.heatmapOpacity);
   const ambientTemperature = useStore(state => state.ambientTemperature);
   const globalMaxTemperature = useStore(state => state.globalMaxTemperature);
+  const manualHeatmapMaxTemperatureC = useStore(state => state.manualHeatmapMaxTemperatureC);
   const heatmapResult = useStore(state => state.heatmapResult);
   const showConductivityMap = useStore(state => state.showConductivityMap);
 
@@ -36,11 +37,12 @@ const HeatmapOverlay: React.FC<HeatmapOverlayProps> = ({ width, height }) => {
         return { data: heatmapResult.kGrid, displayMin: minK, displayMax: maxK, nx: heatmapResult.width, ny: heatmapResult.height };
     }
 
-    const displayMaxT = globalMaxTemperature !== null ? globalMaxTemperature : heatmapResult.maxTemp;
+    const displayMaxT = manualHeatmapMaxTemperatureC !== null ? manualHeatmapMaxTemperatureC :
+                      (globalMaxTemperature !== null ? globalMaxTemperature : heatmapResult.maxTemp);
     const displayMinT = heatmapResult.minTemp;
 
     return { data: heatmapResult.data, displayMin: displayMinT, displayMax: displayMaxT, nx: heatmapResult.width, ny: heatmapResult.height };
-  }, [heatmapResult, ambientTemperature, globalMaxTemperature, width, height, showConductivityMap]);
+  }, [heatmapResult, ambientTemperature, globalMaxTemperature, manualHeatmapMaxTemperatureC, width, height, showConductivityMap]);
 
   useEffect(() => {
     if (!data || nx === 0 || ny === 0) {

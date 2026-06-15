@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { Zone, HeatmapResult, Stackup, PolygonType } from '../thermal/types';
+import { Zone, HeatmapResult, Stackup, PolygonType, BoardStackup, StackupLayer } from '../thermal/types';
 
 export interface Component {
   id: string;
@@ -43,6 +43,7 @@ interface State {
   components: Component[];
   zones: Zone[];
   stackup: Stackup;
+  detailedStackup: BoardStackup;
   calibration: Calibration;
   ambientTemperature: number; // °C
   globalMaxTemperature: number | null; // °C
@@ -54,6 +55,7 @@ interface State {
   showGrid: boolean;
   showConductivityMap: boolean;
   heatmapResult: HeatmapResult | null;
+  manualHeatmapMaxTemperatureC: number | null;
   debugPointerEvents: boolean;
 
   // Actions
@@ -71,6 +73,8 @@ interface State {
   removeZone: (id: string) => void;
 
   setStackup: (stackup: Partial<Stackup>) => void;
+  setDetailedStackup: (stackup: BoardStackup) => void;
+  updateStackupLayer: (layerId: string, updates: Partial<StackupLayer>) => void;
 
   setCalibrationPoint: (point: { x: number; y: number }) => void;
   setCalibrationDistance: (distance: number) => void;
@@ -83,6 +87,7 @@ interface State {
   setShowGrid: (showGrid: boolean) => void;
   setShowConductivityMap: (show: boolean) => void;
   setHeatmapResult: (result: HeatmapResult | null) => void;
+  setManualHeatmapMaxTemperatureC: (temp: number | null) => void;
   setDebugPointerEvents: (enabled: boolean) => void;
 }
 
@@ -96,6 +101,14 @@ export const useStore = create<State>((set) => ({
     layerCount: 2,
     copperOzPerLayer: 1,
     estimatedCopperCoveragePercent: 80,
+    baseConductivityMode: 'manual',
+  },
+  detailedStackup: {
+    layers: [
+      { id: 'top-cu', name: 'Top Copper', type: 'copper', thicknessUm: 35, conductivityWmK: 385, copperCoveragePercent: 50 },
+      { id: 'core', name: 'FR4 Core', type: 'core', thicknessUm: 1530, conductivityWmK: 0.35 },
+      { id: 'bot-cu', name: 'Bottom Copper', type: 'copper', thicknessUm: 35, conductivityWmK: 385, copperCoveragePercent: 50 },
+    ]
   },
   calibration: {
     point1: null,
@@ -113,6 +126,7 @@ export const useStore = create<State>((set) => ({
   showGrid: false,
   showConductivityMap: false,
   heatmapResult: null,
+  manualHeatmapMaxTemperatureC: null,
   debugPointerEvents: false,
 
   setImage: (image, width, height) => set({
@@ -150,6 +164,13 @@ export const useStore = create<State>((set) => ({
   })),
 
   setStackup: (updates) => set((state) => ({ stackup: { ...state.stackup, ...updates } })),
+  setDetailedStackup: (detailedStackup) => set({ detailedStackup }),
+  updateStackupLayer: (layerId, updates) => set((state) => ({
+    detailedStackup: {
+      ...state.detailedStackup,
+      layers: state.detailedStackup.layers.map(l => l.id === layerId ? { ...l, ...updates } : l)
+    }
+  })),
 
   setCalibrationPoint: (point) => set((state) => {
     if (!state.calibration.point1) {
@@ -181,6 +202,7 @@ export const useStore = create<State>((set) => ({
   setShowGrid: (showGrid) => set({ showGrid }),
   setShowConductivityMap: (show) => set({ showConductivityMap: show }),
   setHeatmapResult: (heatmapResult) => set({ heatmapResult }),
+  setManualHeatmapMaxTemperatureC: (manualHeatmapMaxTemperatureC) => set({ manualHeatmapMaxTemperatureC }),
   setDebugPointerEvents: (debugPointerEvents) => set({ debugPointerEvents }),
 }));
 
