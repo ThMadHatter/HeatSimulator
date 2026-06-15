@@ -2,8 +2,8 @@ import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react'
 import { Stage, Layer, Image as KonvaImage, Circle, Line, Text, Group, Rect } from 'react-konva';
 import { useStore, Component, Selection } from '../store/useStore';
 import HeatmapOverlay from './HeatmapOverlay';
-import DebugPanel from './DebugPanel';
-import Legend from './Legend';
+import SolverGridOverlay from './SolverGridOverlay';
+import ExportLegend from './ExportLegend';
 import { PolygonEditor } from './PolygonEditor';
 import { KonvaEventObject } from 'konva/lib/Node';
 import { computeHeatmap } from '../thermal';
@@ -31,8 +31,10 @@ const CanvasView: React.FC = () => {
   const updateZone = useStore(state => state.updateZone);
   const removeZone = useStore(state => state.removeZone);
   const stackup = useStore(state => state.stackup);
+  const detailedStackup = useStore(state => state.detailedStackup);
   const heatmapResult = useStore(state => state.heatmapResult);
   const setHeatmapResult = useStore(state => state.setHeatmapResult);
+  const setStageRef = useStore(state => state.setStageRef);
   const debugPointerEvents = useStore(state => state.debugPointerEvents);
 
   const [stage, setStage] = useState({ scale: 1, x: 0, y: 0 });
@@ -148,6 +150,7 @@ const CanvasView: React.FC = () => {
     return () => { anim.stop(); };
   }, []);
 
+
   useEffect(() => {
     if (image) {
       const img = new window.Image();
@@ -172,7 +175,8 @@ const CanvasView: React.FC = () => {
         boundaryPoints,
         ambientTemperature,
         150,
-        stackup
+        stackup,
+        detailedStackup
     );
     setHeatmapResult(result);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -308,17 +312,22 @@ const CanvasView: React.FC = () => {
     return 'default';
   };
 
+  const stageWidth = window.innerWidth - 64 - 256;
+  const stageHeight = window.innerHeight - 64;
+
   return (
     <div className="flex-1 bg-gray-300 relative overflow-hidden" style={{ cursor: getCursor() }}>
       <Stage
-        width={window.innerWidth - 64 - 256}
-        height={window.innerHeight - 64}
-        scaleX={stage.scale}
-        scaleY={stage.scale}
-        x={stage.x}
-        y={stage.y}
+        width={stageWidth}
+        height={stageHeight}
         onWheel={handleWheel}
         onClick={handleStageClick}
+        ref={(node) => {
+            if (node && node !== stageRef.current) {
+                (stageRef as any).current = node;
+                setStageRef(node);
+            }
+        }}
         onDblClick={(e) => {
             if ((mode === 'drawZone' || mode === 'drawBoundary') && drawingPoints.length >= 3) {
               const type: PolygonType = mode === 'drawZone' ? 'conductivityZone' : 'pcbBoundary';
@@ -345,16 +354,125 @@ const CanvasView: React.FC = () => {
         }}
         onMouseMove={handleMouseMove}
         onDragEnd={(e) => {
-          if (e.target === stageRef.current) setStage({ ...stage, x: e.target.x(), y: e.target.y() });
+          if (e.target.attrs.name === 'STAGE_DRAG_RECT' || e.target === stageRef.current) {
+            setStage({ ...stage, x: e.target.x(), y: e.target.y() });
+          }
         }}
-        draggable={isSpacePressed || mode === 'pan'}
-        ref={stageRef}
       >
-        <Layer>
+        {/* Transparent background for stage dragging */}
+        <Layer
+            draggable={isSpacePressed || mode === 'pan'}
+            onDragEnd={(e) => {
+              if (e.target === e.currentTarget) {
+                setStage({ ...stage, x: e.target.x(), y: e.target.y() });
+              }
+            }}
+            x={stage.x}
+            y={stage.y}
+            scaleX={stage.scale}
+            scaleY={stage.scale}
+        >
+          {/* Background to catch drag events for panning */}
+          {imageDimensions && (
+            <Rect
+              width={imageDimensions.width}
+              height={imageDimensions.height}
+              fill="transparent"
+              listening={isSpacePressed || mode === 'pan'}
+            />
+          )}
           {bgImage && <KonvaImage image={bgImage} listening={false} name="PCB_IMAGE" />}
 
           {calibration.mmPerPixel && imageDimensions && (
             <HeatmapOverlay width={imageDimensions.width} height={imageDimensions.height} />
+          )}
+
+          <SolverGridOverlay />
+
+          {heatmapResult && calibration.mmPerPixel && (
+            <Group name="HOTSPOTS" listening={false}>
+               {/* Max Board Temp Hotspot */}
+               {(() => {
+                  const cellWidthPx = imageDimensions!.width / heatmapResult.width;
+                  const cellHeightPx = imageDimensions!.height / heatmapResult.height;
+                  const x = ((heatmapResult.maxTempIdx % heatmapResult.width) + 0.5) * cellWidthPx;
+                  const y = (Math.floor(heatmapResult.maxTempIdx / heatmapResult.width) + 0.5) * cellHeightPx;
+                  return (
+                    <Group x={x} y={y}>
+                      <Circle radius={10 / stage.scale} stroke="#ef4444" strokeWidth={2 / stage.scale} dash={[2, 2]} />
+                      <Line points={[-15 / stage.scale, 0, 15 / stage.scale, 0]} stroke="#ef4444" strokeWidth={1 / stage.scale} />
+                      <Line points={[0, -15 / stage.scale, 0, 15 / stage.scale]} stroke="#ef4444" strokeWidth={1 / stage.scale} />
+                      <Text text={`MAX BOARD: ${heatmapResult.data[heatmapResult.maxTempIdx].toFixed(1)}°C`} fill="#ef4444" fontSize={10 / stage.scale} fontStyle="bold" y={12 / stage.scale} x={-40 / stage.scale} align="center" width={80 / stage.scale} shadowBlur={2} shadowColor="black" />
+                    </Group>
+                  );
+               })()}
+
+               {/* Over-limit components */}
+               {heatmapResult.junctions.filter(j => j.isOverLimit || (j.ratingPercent && j.ratingPercent > 90)).map(j => {
+                  const comp = components.find(c => c.id === j.compId);
+                  if (!comp) return null;
+                  return (
+                    <Group key={`hotspot-${comp.id}`} x={mmToPx(comp.x)} y={mmToPx(comp.y)}>
+                        <Rect
+                          x={-mmToPx(comp.width)/2 - 5 / stage.scale}
+                          y={-mmToPx(comp.height)/2 - 5 / stage.scale}
+                          width={mmToPx(comp.width) + 10 / stage.scale}
+                          height={mmToPx(comp.height) + 10 / stage.scale}
+                          stroke="#ef4444"
+                          strokeWidth={3 / stage.scale}
+                        />
+                    </Group>
+                  );
+               })}
+            </Group>
+          )}
+
+          {mode === 'calibrate' && (
+            <Group listening={true}>
+              {calibration.point1 && (
+                <Circle
+                  x={calibration.point1.x}
+                  y={calibration.point1.y}
+                  radius={6 / stage.scale}
+                  fill="#ef4444"
+                  stroke="white"
+                  strokeWidth={2 / stage.scale}
+                />
+              )}
+              {calibration.point2 && (
+                <Circle
+                  x={calibration.point2.x}
+                  y={calibration.point2.y}
+                  radius={6 / stage.scale}
+                  fill="#ef4444"
+                  stroke="white"
+                  strokeWidth={2 / stage.scale}
+                />
+              )}
+              {calibration.point1 && calibration.point2 && (
+                <Line
+                  points={[
+                    calibration.point1.x, calibration.point1.y,
+                    calibration.point2.x, calibration.point2.y
+                  ]}
+                  stroke="#ef4444"
+                  strokeWidth={3 / stage.scale}
+                  dash={[5, 5]}
+                />
+              )}
+              {calibration.point1 && !calibration.point2 && mousePos && (
+                <Line
+                  points={[
+                    calibration.point1.x, calibration.point1.y,
+                    mousePos.x, mousePos.y
+                  ]}
+                  stroke="#ef4444"
+                  strokeWidth={2 / stage.scale}
+                  opacity={0.5}
+                  dash={[5, 5]}
+                />
+              )}
+            </Group>
           )}
 
           {pcbBoundary && <PolygonEditor shape={pcbBoundary} mmToPx={mmToPx} pxToMm={pxToMm} />}
@@ -446,9 +564,12 @@ const CanvasView: React.FC = () => {
             );
           })}
         </Layer>
-      </Stage>
 
-      <Legend />
+        {/* Fixed overlays layer (not scaled/panned) */}
+        <Layer listening={false}>
+            <ExportLegend />
+        </Layer>
+      </Stage>
 
       {calibration.mmPerPixel && (
         <div className="absolute bottom-4 right-4 bg-black/80 text-white p-3 rounded text-[10px] font-mono pointer-events-none border border-white/20 backdrop-blur-sm shadow-xl min-w-[150px]">
@@ -503,8 +624,6 @@ const CanvasView: React.FC = () => {
               <span className="text-gray-400">Delete:</span> <span>Remove</span>
           </div>
       </div>
-
-      <DebugPanel />
     </div>
   );
 };

@@ -1,5 +1,5 @@
 import { Component } from '../store/useStore';
-import { Point, HeatmapResult, JunctionData, Zone, Stackup } from './types';
+import { Point, HeatmapResult, JunctionData, Zone, Stackup, BoardStackup } from './types';
 import { isPointInPolygon, estimateBaseConductivity } from './utils';
 
 export function solveSteadyState(
@@ -11,6 +11,7 @@ export function solveSteadyState(
     ambientTemp: number,
     resolution: number = 150,
     stackup?: Stackup,
+    detailedStackup?: BoardStackup,
     debug: boolean = false
 ): HeatmapResult {
     // 0. Input Validation
@@ -39,7 +40,7 @@ export function solveSteadyState(
     const kGrid = new Float32Array(size);
 
     // Physical Constants
-    const baseK = stackup ? estimateBaseConductivity(stackup) : 25.0;
+    const baseK = stackup ? estimateBaseConductivity(stackup, detailedStackup) : 25.0;
     kGrid.fill(baseK);
 
     const h = 15.0; // W/m²K
@@ -62,8 +63,8 @@ export function solveSteadyState(
 
         for (let j = startY; j <= endY; j++) {
             for (let i = startX; i <= endX; i++) {
-                const x = i * dx;
-                const y = j * dx;
+                const x = (i + 0.5) * dx;
+                const y = (j + 0.5) * dx;
                 if (isPointInPolygon({ x, y }, zone.points)) {
                     kGrid[j * nx + i] = zone.conductivity ?? 50.0;
                 }
@@ -76,31 +77,34 @@ export function solveSteadyState(
     const componentCells: Record<string, number> = {};
 
     for (const comp of components) {
-        const area = comp.width * comp.height || 1;
-        const powerPerM2 = comp.power / (area / 1000000);
-
         const startX = Math.max(0, Math.floor((comp.x - comp.width / 2) / dx));
         const endX = Math.min(nx - 1, Math.floor((comp.x + comp.width / 2) / dx));
         const startY = Math.max(0, Math.floor((comp.y - comp.height / 2) / dx));
         const endY = Math.min(ny - 1, Math.floor((comp.y + comp.height / 2) / dx));
 
-        let cellsCount = 0;
+        let cells: number[] = [];
         for (let j = startY; j <= endY; j++) {
             for (let i = startX; i <= endX; i++) {
-                Q[j * nx + i] += powerPerM2;
-                cellsCount++;
+                cells.push(j * nx + i);
             }
         }
 
-        if (cellsCount === 0) {
+        if (cells.length === 0) {
             const i = Math.max(0, Math.min(nx - 1, Math.floor(comp.x / dx)));
             const j = Math.max(0, Math.min(ny - 1, Math.floor(comp.y / dx)));
-            const cellAreaM2 = dxM * dxM;
-            Q[j * nx + i] += comp.power / cellAreaM2;
-            cellsCount = 1;
+            cells.push(j * nx + i);
         }
 
-        componentCells[comp.id] = cellsCount;
+        // Power normalization: Distribute exactly comp.power across all mapped cells
+        const powerPerCell = comp.power / cells.length;
+        const cellAreaM2 = dxM * dxM;
+        const qPerCell = powerPerCell / cellAreaM2;
+
+        for (const idx of cells) {
+            Q[idx] += qPerCell;
+        }
+
+        componentCells[comp.id] = cells.length;
         totalInjectedPower += comp.power;
     }
 
@@ -108,8 +112,8 @@ export function solveSteadyState(
     if (boundary && boundary.length >= 3) {
         for (let j = 0; j < ny; j++) {
             for (let i = 0; i < nx; i++) {
-                const x = i * dx;
-                const y = j * dx;
+                const x = (i + 0.5) * dx;
+                const y = (j + 0.5) * dx;
                 if (!isPointInPolygon({ x, y }, boundary)) {
                     isInside[j * nx + i] = 0;
                 }
@@ -235,8 +239,12 @@ export function solveSteadyState(
     });
 
     let maxBoardT = ambientTemp;
+    let maxTempIdx = 0;
     for (let i = 0; i < size; i++) {
-        if (T[i] > maxBoardT) maxBoardT = T[i];
+        if (T[i] > maxBoardT) {
+            maxBoardT = T[i];
+            maxTempIdx = i;
+        }
     }
 
     const junctionMax = junctions.reduce((max, j) => Math.max(max, j.tj || 0), ambientTemp);
@@ -252,6 +260,7 @@ export function solveSteadyState(
         height: ny,
         minTemp: ambientTemp,
         maxTemp: Math.max(maxBoardT, junctionMax),
+        maxTempIdx,
         junctions,
         iterations
     };

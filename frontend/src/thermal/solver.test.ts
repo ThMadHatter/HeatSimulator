@@ -114,11 +114,11 @@ describe('solveSteadyState', () => {
     });
 
     it('stackup estimator returns reasonable values', () => {
-        const s1: Stackup = { boardThicknessMm: 1.6, layerCount: 2, copperOzPerLayer: 1, estimatedCopperCoveragePercent: 100 };
+        const s1: Stackup = { boardThicknessMm: 1.6, layerCount: 2, copperOzPerLayer: 1, estimatedCopperCoveragePercent: 100, baseConductivityMode: 'manual' };
         const k1 = estimateBaseConductivity(s1);
         expect(k1).toBeGreaterThan(10);
 
-        const s2: Stackup = { boardThicknessMm: 1.6, layerCount: 0, copperOzPerLayer: 0, estimatedCopperCoveragePercent: 0 };
+        const s2: Stackup = { boardThicknessMm: 1.6, layerCount: 0, copperOzPerLayer: 0, estimatedCopperCoveragePercent: 0, baseConductivityMode: 'manual' };
         const k2 = estimateBaseConductivity(s2);
         expect(k2).toBeCloseTo(0.35, 1);
     });

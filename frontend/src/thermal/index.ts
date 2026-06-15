@@ -1,10 +1,11 @@
 import { Component } from '../store/useStore';
-import { Point, HeatmapResult, Stackup } from './types';
+import { Point, HeatmapResult, Stackup, BoardStackup } from './types';
 import { solveSteadyState } from './solver';
 import { applyColorMap } from './colorMap';
+import { estimateBaseConductivity } from './utils';
 
 export * from './types';
-export { applyColorMap };
+export { applyColorMap, estimateBaseConductivity };
 
 import { Zone } from './types';
 
@@ -17,7 +18,8 @@ export const computeHeatmap = (
     ambientTemp: number,
     resolution: number = 150,
     stackup?: Stackup,
+    detailedStackup?: BoardStackup,
     debug: boolean = false
 ): HeatmapResult => {
-    return solveSteadyState(components, zones, widthMm, heightMm, boundary, ambientTemp, resolution, stackup, debug);
+    return solveSteadyState(components, zones, widthMm, heightMm, boundary, ambientTemp, resolution, stackup, detailedStackup, debug);
 };
