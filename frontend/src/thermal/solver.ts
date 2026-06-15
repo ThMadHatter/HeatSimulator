@@ -321,6 +321,8 @@ export function solveSteadyState(
         kGrid,
         width: nx,
         height: ny,
+        widthMm,
+        heightMm,
         minTemp: ambientTemp,
         maxTemp: Math.max(maxBoardT, junctionMax),
         maxTempIdx,

@@ -5,7 +5,7 @@ import { SelectImage, LoadImage } from '../../wailsjs/go/main/App';
 import { detectPCBOutline, isOpenCVReady } from '../thermal/edgeDetection';
 
 const Toolbar: React.FC = () => {
-  const { mode, setMode, selection, setImageSide, image, calibration, addZone, removeZone, zones, clearSelection } = useStore();
+  const { mode, setMode, selection, setImageSide, image, calibration, calibrationTop, calibrationBottom, heatmapViewMode, addZone, removeZone, zones, clearSelection } = useStore();
 
   const handleLoadImage = async (side: 'top' | 'bottom') => {
     try {
@@ -91,7 +91,14 @@ const Toolbar: React.FC = () => {
       <button onClick={() => changeMode('drawBoundary')} className={`p-2 rounded transition-colors ${mode === 'drawBoundary' ? 'bg-blue-600' : 'hover:bg-gray-700'}`} title="Draw PCB Boundary (B)"><Square size={24} /></button>
       <button onClick={handleAutoDetect} className="p-2 rounded hover:bg-gray-700 transition-colors" title="Auto-detect PCB Boundary"><Scan size={24} /></button>
       <button onClick={() => changeMode('addComponent')} className={`p-2 rounded transition-colors ${mode === 'addComponent' ? 'bg-blue-600' : 'hover:bg-gray-700'}`} title="Add Component (A)"><Plus size={24} /></button>
-      <button onClick={() => changeMode('calibrate')} className={`p-2 rounded transition-colors ${mode === 'calibrate' ? 'bg-blue-600' : 'hover:bg-gray-700'}`} title="Calibrate Scale (C)"><Ruler size={24} /></button>
+      <div className="flex flex-col gap-1 items-center">
+          <button onClick={() => changeMode('calibrate')} className={`p-2 rounded transition-colors ${mode === 'calibrate' ? 'bg-blue-600' : 'hover:bg-gray-700'} relative`} title="Calibrate Scale (C)">
+              <Ruler size={24} />
+              {calibrationTop.mmPerPixel && <span className="absolute top-0 right-0 w-2 h-2 bg-blue-500 rounded-full border border-gray-800" title="Top Calibrated"></span>}
+              {calibrationBottom.mmPerPixel && <span className="absolute bottom-0 right-0 w-2 h-2 bg-green-500 rounded-full border border-gray-800" title="Bottom Calibrated"></span>}
+          </button>
+          <span className="text-[8px] font-bold text-gray-400 uppercase">{heatmapViewMode === 'bottom' ? 'Bot' : 'Top'}</span>
+      </div>
     </div>
   );
 };

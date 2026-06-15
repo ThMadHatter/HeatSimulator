@@ -19,6 +19,10 @@ const HeatmapOverlay: React.FC<HeatmapOverlayProps> = ({ width, height }) => {
 
   const [heatmapImg, setHeatmapImg] = useState<HTMLImageElement | null>(null);
 
+  const bottomImageOffset = useStore(state => state.bottomImageOffset);
+  const bottomImageRotation = useStore(state => state.bottomImageRotation);
+  const calibrationBottom = useStore(state => state.calibrationBottom);
+
   const { data, displayMin, displayMax, nx, ny, colorMode } = useMemo(() => {
     if (!heatmapResult || width <= 0 || height <= 0) {
         return { data: null, displayMin: ambientTemperature, displayMax: ambientTemperature + 10, nx: 0, ny: 0 };
@@ -94,6 +98,8 @@ const HeatmapOverlay: React.FC<HeatmapOverlayProps> = ({ width, height }) => {
   }, [data, displayMin, displayMax, nx, ny]);
 
   if (!heatmapImg) return null;
+
+  const mmToPxBottom = (mm: number) => calibrationBottom.mmPerPixel ? mm / calibrationBottom.mmPerPixel : mm;
 
   return (
     <KonvaImage

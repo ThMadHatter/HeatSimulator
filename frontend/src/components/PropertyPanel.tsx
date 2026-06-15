@@ -44,6 +44,14 @@ const PropertyPanel: React.FC = () => {
   const setManualHeatmapMaxTemperatureC = useStore(state => state.setManualHeatmapMaxTemperatureC);
   const heatmapViewMode = useStore(state => state.heatmapViewMode);
   const setHeatmapViewMode = useStore(state => state.setHeatmapViewMode);
+  const bottomImageOffset = useStore(state => state.bottomImageOffset);
+  const setBottomImageOffset = useStore(state => state.setBottomImageOffset);
+  const bottomImageRotation = useStore(state => state.bottomImageRotation);
+  const setBottomImageRotation = useStore(state => state.setBottomImageRotation);
+  const bottomImageMirrorX = useStore(state => state.bottomImageMirrorX);
+  const setBottomImageMirrorX = useStore(state => state.setBottomImageMirrorX);
+  const bottomImageMirrorY = useStore(state => state.bottomImageMirrorY);
+  const setBottomImageMirrorY = useStore(state => state.setBottomImageMirrorY);
   const heatmapResult = useStore(state => state.heatmapResult);
   const heatmapOpacity = useStore(state => state.heatmapOpacity);
   const setHeatmapOpacity = useStore(state => state.setHeatmapOpacity);
@@ -311,7 +319,8 @@ const PropertyPanel: React.FC = () => {
                             { id: 'top', label: 'Top' },
                             { id: 'bottom', label: 'Bottom' },
                             { id: 'max', label: 'Max T/B' },
-                            { id: 'difference', label: 'Delta T' }
+                            { id: 'difference', label: 'Delta T' },
+                            { id: 'align', label: 'Alignment' }
                         ].map(mode => (
                             <button
                                 key={mode.id}
@@ -327,6 +336,37 @@ const PropertyPanel: React.FC = () => {
                         ))}
                     </div>
                 </div>
+
+                {heatmapViewMode === 'align' && (
+                    <div className="p-2 bg-orange-50 rounded border border-orange-200">
+                        <div className="text-[10px] font-bold text-orange-700 mb-2 uppercase">Image Alignment (Bottom)</div>
+                        <div className="grid grid-cols-2 gap-2">
+                            <div>
+                                <label className="text-[9px] text-gray-500 block">Offset X (mm)</label>
+                                <input type="number" step="0.1" value={bottomImageOffset.x} onChange={(e) => setBottomImageOffset({...bottomImageOffset, x: parseFloat(e.target.value) || 0})} className="w-full bg-white text-gray-800 text-[10px] px-2 py-1 rounded border border-gray-300" />
+                            </div>
+                            <div>
+                                <label className="text-[9px] text-gray-500 block">Offset Y (mm)</label>
+                                <input type="number" step="0.1" value={bottomImageOffset.y} onChange={(e) => setBottomImageOffset({...bottomImageOffset, y: parseFloat(e.target.value) || 0})} className="w-full bg-white text-gray-800 text-[10px] px-2 py-1 rounded border border-gray-300" />
+                            </div>
+                            <div className="col-span-2">
+                                <label className="text-[9px] text-gray-500 block">Rotation (deg)</label>
+                                <input type="number" step="0.5" value={bottomImageRotation} onChange={(e) => setBottomImageRotation(parseFloat(e.target.value) || 0)} className="w-full bg-white text-gray-800 text-[10px] px-2 py-1 rounded border border-gray-300" />
+                            </div>
+                            <div className="flex items-center gap-4 col-span-2 mt-1">
+                                <label className="flex items-center gap-1 cursor-pointer">
+                                    <input type="checkbox" checked={bottomImageMirrorX} onChange={(e) => setBottomImageMirrorX(e.target.checked)} className="rounded text-blue-600" />
+                                    <span className="text-[9px] text-gray-600 font-bold uppercase">Mirror X</span>
+                                </label>
+                                <label className="flex items-center gap-1 cursor-pointer">
+                                    <input type="checkbox" checked={bottomImageMirrorY} onChange={(e) => setBottomImageMirrorY(e.target.checked)} className="rounded text-blue-600" />
+                                    <span className="text-[9px] text-gray-600 font-bold uppercase">Mirror Y</span>
+                                </label>
+                            </div>
+                        </div>
+                        <div className="text-[8px] text-gray-500 mt-2 italic text-center">Hint: Drag bottom image in canvas to align</div>
+                    </div>
+                )}
 
                 <div className="flex items-center justify-between pt-2 border-t border-gray-100">
                     <label className="text-xs font-medium text-gray-700">Auto Scale</label>

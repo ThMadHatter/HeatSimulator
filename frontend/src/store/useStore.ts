@@ -51,6 +51,12 @@ interface State {
   stackup: Stackup;
   detailedStackup: BoardStackup;
   calibration: Calibration;
+  calibrationTop: Calibration;
+  calibrationBottom: Calibration;
+  bottomImageOffset: { x: number; y: number }; // mm
+  bottomImageRotation: number; // degrees
+  bottomImageMirrorX: boolean;
+  bottomImageMirrorY: boolean;
   ambientTemperature: number; // °C
   globalMaxTemperature: number | null; // °C
 
@@ -85,9 +91,13 @@ interface State {
   setDetailedStackup: (stackup: BoardStackup) => void;
   updateStackupLayer: (layerId: string, updates: Partial<StackupLayer>) => void;
 
-  setCalibrationPoint: (point: { x: number; y: number }) => void;
-  setCalibrationDistance: (distance: number) => void;
-  resetCalibration: () => void;
+  setCalibrationPoint: (point: { x: number; y: number }, side?: 'top' | 'bottom') => void;
+  setCalibrationDistance: (distance: number, side?: 'top' | 'bottom') => void;
+  resetCalibration: (side?: 'top' | 'bottom') => void;
+  setBottomImageOffset: (offset: { x: number; y: number }) => void;
+  setBottomImageRotation: (rotation: number) => void;
+  setBottomImageMirrorX: (mirror: boolean) => void;
+  setBottomImageMirrorY: (mirror: boolean) => void;
 
   setAmbientTemperature: (temp: number) => void;
   setGlobalMaxTemperature: (temp: number | null) => void;
@@ -101,6 +111,13 @@ interface State {
   setDebugPointerEvents: (enabled: boolean) => void;
   setStageRef: (ref: Konva.Stage | null) => void;
 }
+
+const initialCalibration: Calibration = {
+  point1: null,
+  point2: null,
+  distanceMm: 0,
+  mmPerPixel: null,
+};
 
 export const useStore = create<State>((set) => ({
   image: null,
@@ -125,12 +142,13 @@ export const useStore = create<State>((set) => ({
       { id: 'bot-cu', name: 'Bottom Copper', type: 'copper', thicknessUm: 35, conductivityWmK: 385, copperCoveragePercent: 50 },
     ]
   },
-  calibration: {
-    point1: null,
-    point2: null,
-    distanceMm: 0,
-    mmPerPixel: null,
-  },
+  calibration: { ...initialCalibration },
+  calibrationTop: { ...initialCalibration },
+  calibrationBottom: { ...initialCalibration },
+  bottomImageOffset: { x: 0, y: 0 },
+  bottomImageRotation: 0,
+  bottomImageMirrorX: false,
+  bottomImageMirrorY: false,
   ambientTemperature: 25,
   globalMaxTemperature: null,
 
@@ -154,17 +172,18 @@ export const useStore = create<State>((set) => ({
     components: [],
     zones: [],
     selection: null,
-    calibration: { point1: null, point2: null, distanceMm: 0, mmPerPixel: null }
+    calibration: { ...initialCalibration },
+    calibrationTop: { ...initialCalibration },
   }),
   setImageSide: (side, image, width, height) => set((state) => {
     const updates: Partial<State> = {};
     if (side === 'top') {
       updates.imageTop = image;
       updates.imageDimensionsTop = width && height ? { width, height } : null;
-      // Also update the legacy main image if this is the first image or current image
       if (!state.image || state.image === state.imageTop) {
         updates.image = image;
         updates.imageDimensions = width && height ? { width, height } : null;
+        updates.calibration = state.calibrationTop;
       }
     } else {
       updates.imageBottom = image;
@@ -172,6 +191,7 @@ export const useStore = create<State>((set) => ({
       if (!state.image) {
         updates.image = image;
         updates.imageDimensions = width && height ? { width, height } : null;
+        updates.calibration = state.calibrationBottom;
       }
     }
     return updates;
@@ -211,28 +231,60 @@ export const useStore = create<State>((set) => ({
     }
   })),
 
-  setCalibrationPoint: (point) => set((state) => {
-    if (!state.calibration.point1) {
-      return { calibration: { ...state.calibration, point1: point } };
-    }
-    if (!state.calibration.point2) {
-      const p1 = state.calibration.point1;
+  setCalibrationPoint: (point, side) => set((state) => {
+    const activeSide = side || (state.heatmapViewMode === 'bottom' ? 'bottom' : 'top');
+    const calKey = activeSide === 'top' ? 'calibrationTop' : 'calibrationBottom';
+    const cal = state[calKey];
+
+    let newCal: Calibration;
+    if (!cal.point1) {
+      newCal = { ...cal, point1: point };
+    } else if (!cal.point2) {
+      const p1 = cal.point1;
       const distPx = Math.sqrt(Math.pow(point.x - p1.x, 2) + Math.pow(point.y - p1.y, 2));
-      const mmPerPixel = state.calibration.distanceMm > 0 ? state.calibration.distanceMm / distPx : null;
-      return { calibration: { ...state.calibration, point2: point, mmPerPixel } };
+      const mmPerPixel = cal.distanceMm > 0 ? cal.distanceMm / distPx : null;
+      newCal = { ...cal, point2: point, mmPerPixel };
+    } else {
+      newCal = { ...cal, point1: point, point2: null, mmPerPixel: null };
     }
-    return { calibration: { ...state.calibration, point1: point, point2: null, mmPerPixel: null } };
+
+    const updates: Partial<State> = { [calKey]: newCal };
+    if (activeSide === (state.heatmapViewMode === 'bottom' ? 'bottom' : 'top')) {
+      updates.calibration = newCal;
+    }
+    return updates;
   }),
-  setCalibrationDistance: (distance) => set((state) => {
+  setCalibrationDistance: (distance, side) => set((state) => {
+    const activeSide = side || (state.heatmapViewMode === 'bottom' ? 'bottom' : 'top');
+    const calKey = activeSide === 'top' ? 'calibrationTop' : 'calibrationBottom';
+    const cal = state[calKey];
+
     let mmPerPixel = null;
-    if (state.calibration.point1 && state.calibration.point2) {
-      const p1 = state.calibration.point1;
-      const distPx = Math.sqrt(Math.pow(state.calibration.point2.x - p1.x, 2) + Math.pow(state.calibration.point2.y - p1.y, 2));
+    if (cal.point1 && cal.point2) {
+      const p1 = cal.point1;
+      const distPx = Math.sqrt(Math.pow(cal.point2.x - p1.x, 2) + Math.pow(cal.point2.y - p1.y, 2));
       mmPerPixel = distance / distPx;
     }
-    return { calibration: { ...state.calibration, distanceMm: distance, mmPerPixel } };
+    const newCal = { ...cal, distanceMm: distance, mmPerPixel };
+    const updates: Partial<State> = { [calKey]: newCal };
+    if (activeSide === (state.heatmapViewMode === 'bottom' ? 'bottom' : 'top')) {
+      updates.calibration = newCal;
+    }
+    return updates;
   }),
-  resetCalibration: () => set({ calibration: { point1: null, point2: null, distanceMm: 0, mmPerPixel: null } }),
+  resetCalibration: (side) => set((state) => {
+    const activeSide = side || (state.heatmapViewMode === 'bottom' ? 'bottom' : 'top');
+    const calKey = activeSide === 'top' ? 'calibrationTop' : 'calibrationBottom';
+    const updates: Partial<State> = { [calKey]: { ...initialCalibration } };
+    if (activeSide === (state.heatmapViewMode === 'bottom' ? 'bottom' : 'top')) {
+      updates.calibration = { ...initialCalibration };
+    }
+    return updates;
+  }),
+  setBottomImageOffset: (bottomImageOffset) => set({ bottomImageOffset }),
+  setBottomImageRotation: (bottomImageRotation) => set({ bottomImageRotation }),
+  setBottomImageMirrorX: (bottomImageMirrorX) => set({ bottomImageMirrorX }),
+  setBottomImageMirrorY: (bottomImageMirrorY) => set({ bottomImageMirrorY }),
 
   setAmbientTemperature: (ambientTemperature) => set({ ambientTemperature }),
   setGlobalMaxTemperature: (globalMaxTemperature) => set({ globalMaxTemperature }),
@@ -241,7 +293,17 @@ export const useStore = create<State>((set) => ({
   setShowGrid: (showGrid) => set({ showGrid }),
   setShowConductivityMap: (show) => set({ showConductivityMap: show }),
   setHeatmapResult: (heatmapResult) => set({ heatmapResult }),
-  setHeatmapViewMode: (heatmapViewMode) => set({ heatmapViewMode }),
+  setHeatmapViewMode: (heatmapViewMode) => set((state) => {
+    const updates: Partial<State> = { heatmapViewMode };
+    // Maintain 'calibration' as the primary one for UI tools,
+    // but we'll use Top/Bottom specifically in the canvas logic.
+    if (heatmapViewMode === 'bottom') {
+      updates.calibration = state.calibrationBottom;
+    } else {
+      updates.calibration = state.calibrationTop;
+    }
+    return updates;
+  }),
   setManualHeatmapMaxTemperatureC: (manualHeatmapMaxTemperatureC) => set({ manualHeatmapMaxTemperatureC }),
   setDebugPointerEvents: (debugPointerEvents) => set({ debugPointerEvents }),
   setStageRef: (stageRef) => set({ stageRef }),
