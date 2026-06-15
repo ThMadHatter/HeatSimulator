@@ -2,6 +2,11 @@ import { Component } from '../store/useStore';
 import { Point, HeatmapResult, JunctionData, Zone, Stackup, BoardStackup } from './types';
 import { isPointInPolygon, estimateBaseConductivity, calculateStackupKZ } from './utils';
 
+/**
+ * Solves the steady-state heat equation for the PCB using a coupled two-grid approach.
+ * This is a simplified 2.5D coupled-surface model, not a full 3D FEA solver.
+ * Currently, conductivity zones (kGrid) are applied symmetrically to both top and bottom grids.
+ */
 export function solveSteadyState(
     components: Component[],
     zones: Zone[],

@@ -42,6 +42,10 @@ export type Selection =
 interface State {
   image: string | null;
   imageDimensions: { width: number; height: number } | null;
+  imageTop: string | null;
+  imageBottom: string | null;
+  imageDimensionsTop: { width: number; height: number } | null;
+  imageDimensionsBottom: { width: number; height: number } | null;
   components: Component[];
   zones: Zone[];
   stackup: Stackup;
@@ -64,6 +68,7 @@ interface State {
 
   // Actions
   setImage: (image: string | null, width?: number, height?: number) => void;
+  setImageSide: (side: 'top' | 'bottom', image: string | null, width?: number, height?: number) => void;
   setMode: (mode: InteractionMode) => void;
   setSelection: (selection: Selection) => void;
   clearSelection: () => void;
@@ -100,6 +105,10 @@ interface State {
 export const useStore = create<State>((set) => ({
   image: null,
   imageDimensions: null,
+  imageTop: null,
+  imageBottom: null,
+  imageDimensionsTop: null,
+  imageDimensionsBottom: null,
   components: [],
   zones: [],
   stackup: {
@@ -140,10 +149,32 @@ export const useStore = create<State>((set) => ({
   setImage: (image, width, height) => set({
     image,
     imageDimensions: width && height ? { width, height } : null,
+    imageTop: image,
+    imageDimensionsTop: width && height ? { width, height } : null,
     components: [],
     zones: [],
     selection: null,
     calibration: { point1: null, point2: null, distanceMm: 0, mmPerPixel: null }
+  }),
+  setImageSide: (side, image, width, height) => set((state) => {
+    const updates: Partial<State> = {};
+    if (side === 'top') {
+      updates.imageTop = image;
+      updates.imageDimensionsTop = width && height ? { width, height } : null;
+      // Also update the legacy main image if this is the first image or current image
+      if (!state.image || state.image === state.imageTop) {
+        updates.image = image;
+        updates.imageDimensions = width && height ? { width, height } : null;
+      }
+    } else {
+      updates.imageBottom = image;
+      updates.imageDimensionsBottom = width && height ? { width, height } : null;
+      if (!state.image) {
+        updates.image = image;
+        updates.imageDimensions = width && height ? { width, height } : null;
+      }
+    }
+    return updates;
   }),
   setMode: (mode) => set({ mode }),
   setSelection: (selection) => set((state) => {

@@ -5,15 +5,15 @@ import { SelectImage, LoadImage } from '../../wailsjs/go/main/App';
 import { detectPCBOutline, isOpenCVReady } from '../thermal/edgeDetection';
 
 const Toolbar: React.FC = () => {
-  const { mode, setMode, selection, setImage, image, calibration, addZone, removeZone, zones, clearSelection } = useStore();
+  const { mode, setMode, selection, setImageSide, image, calibration, addZone, removeZone, zones, clearSelection } = useStore();
 
-  const handleLoadImage = async () => {
+  const handleLoadImage = async (side: 'top' | 'bottom') => {
     try {
       const path = await SelectImage();
       if (path) {
         const base64 = await LoadImage(path);
         const img = new Image();
-        img.onload = () => setImage(base64, img.width, img.height);
+        img.onload = () => setImageSide(side, base64, img.width, img.height);
         img.src = base64;
       }
     } catch (err) {
@@ -72,7 +72,16 @@ const Toolbar: React.FC = () => {
 
   return (
     <div className="flex-none flex flex-col gap-4 p-4 bg-gray-800 text-white w-16 items-center shadow-lg h-full z-20 overflow-y-auto">
-      <button onClick={handleLoadImage} className="p-2 rounded hover:bg-gray-700 transition-colors" title="Load Image"><Upload size={24} /></button>
+      <div className="flex flex-col gap-2">
+          <button onClick={() => handleLoadImage('top')} className="p-2 rounded hover:bg-gray-700 transition-colors relative group" title="Load Top Image">
+              <Upload size={24} />
+              <span className="absolute -bottom-1 -right-1 bg-blue-600 text-[8px] font-bold px-1 rounded">T</span>
+          </button>
+          <button onClick={() => handleLoadImage('bottom')} className="p-2 rounded hover:bg-gray-700 transition-colors relative group" title="Load Bottom Image">
+              <Upload size={24} />
+              <span className="absolute -bottom-1 -right-1 bg-green-600 text-[8px] font-bold px-1 rounded">B</span>
+          </button>
+      </div>
       <div className="w-full h-px bg-gray-700 my-1" />
       <button onClick={() => changeMode('select')} className={`p-2 rounded transition-colors ${mode === 'select' ? 'bg-blue-600' : 'hover:bg-gray-700'}`} title="Select (V)"><MousePointer2 size={24} /></button>
       <button onClick={() => changeMode('pan')} className={`p-2 rounded transition-colors ${mode === 'pan' ? 'bg-blue-600' : 'hover:bg-gray-700'}`} title="Pan (H)"><Hand size={24} /></button>

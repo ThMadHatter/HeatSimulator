@@ -12,8 +12,10 @@ import { Zone, Point, PolygonType } from '../thermal/types';
 import { isPointInPolygon } from '../thermal/utils';
 
 const CanvasView: React.FC = () => {
-  const image = useStore(state => state.image);
-  const imageDimensions = useStore(state => state.imageDimensions);
+  const imageTop = useStore(state => state.imageTop);
+  const imageBottom = useStore(state => state.imageBottom);
+  const imageDimensionsTop = useStore(state => state.imageDimensionsTop);
+  const imageDimensionsBottom = useStore(state => state.imageDimensionsBottom);
   const mode = useStore(state => state.mode);
   const setMode = useStore(state => state.setMode);
   const components = useStore(state => state.components);
@@ -44,7 +46,8 @@ const CanvasView: React.FC = () => {
   const [cursorPos, setCursorPos] = useState<Point | null>(null);
 
   const [mousePos, setMousePos] = useState({ x: 0, y: 0, mmX: 0, mmY: 0, temp: 0, tTop: 0, tBottom: 0, k: 0 });
-  const [bgImage, setBgImage] = useState<HTMLImageElement | null>(null);
+  const [bgImageTop, setBgImageTop] = useState<HTMLImageElement | null>(null);
+  const [bgImageBottom, setBgImageBottom] = useState<HTMLImageElement | null>(null);
   const stageRef = useRef<Konva.Stage>(null);
   const [opacity, setOpacity] = useState(1);
 
@@ -153,17 +156,28 @@ const CanvasView: React.FC = () => {
 
 
   useEffect(() => {
-    if (image) {
+    if (imageTop) {
       const img = new window.Image();
-      img.src = image;
-      img.onload = () => setBgImage(img);
+      img.src = imageTop;
+      img.onload = () => setBgImageTop(img);
     } else {
-      setBgImage(null);
+      setBgImageTop(null);
     }
-  }, [image]);
+  }, [imageTop]);
 
   useEffect(() => {
-    if (!imageDimensions || !calibration.mmPerPixel || components.length === 0) {
+    if (imageBottom) {
+      const img = new window.Image();
+      img.src = imageBottom;
+      img.onload = () => setBgImageBottom(img);
+    } else {
+      setBgImageBottom(null);
+    }
+  }, [imageBottom]);
+
+  useEffect(() => {
+    const currentDimensions = heatmapViewMode === 'bottom' ? (imageDimensionsBottom || imageDimensionsTop) : (imageDimensionsTop || imageDimensionsBottom);
+    if (!currentDimensions || !calibration.mmPerPixel || components.length === 0) {
         setHeatmapResult(null);
         return;
     }
@@ -171,8 +185,8 @@ const CanvasView: React.FC = () => {
     const result = computeHeatmap(
         components,
         zones.filter(z => z.type === 'conductivityZone'),
-        imageDimensions.width * calibration.mmPerPixel,
-        imageDimensions.height * calibration.mmPerPixel,
+        currentDimensions.width * calibration.mmPerPixel,
+        currentDimensions.height * calibration.mmPerPixel,
         boundaryPoints,
         ambientTemperature,
         150,
@@ -181,7 +195,7 @@ const CanvasView: React.FC = () => {
     );
     setHeatmapResult(result);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [components, zones, imageDimensions, calibration.mmPerPixel, ambientTemperature, stackup, setHeatmapResult]);
+  }, [components, zones, imageDimensionsTop, imageDimensionsBottom, calibration.mmPerPixel, ambientTemperature, stackup, setHeatmapResult, heatmapViewMode]);
 
   const handleMouseMove = (e: any) => {
     const stageObj = e.target.getStage();
@@ -199,8 +213,9 @@ const CanvasView: React.FC = () => {
         mmX = pointer.x * calibration.mmPerPixel;
         mmY = pointer.y * calibration.mmPerPixel;
 
-        if (heatmapResult && imageDimensions) {
-            const dx = Math.max(imageDimensions.width * calibration.mmPerPixel, imageDimensions.height * calibration.mmPerPixel) / 150;
+        const currentDimensions = heatmapViewMode === 'bottom' ? (imageDimensionsBottom || imageDimensionsTop) : (imageDimensionsTop || imageDimensionsBottom);
+        if (heatmapResult && currentDimensions) {
+            const dx = Math.max(currentDimensions.width * calibration.mmPerPixel, currentDimensions.height * calibration.mmPerPixel) / 150;
             const gridX = Math.floor(mmX / dx);
             const gridY = Math.floor(mmY / dx);
             if (gridX >= 0 && gridX < heatmapResult.width && gridY >= 0 && gridY < heatmapResult.height) {
@@ -304,7 +319,7 @@ const CanvasView: React.FC = () => {
   const mmToPx = (mm: number) => calibration.mmPerPixel ? mm / calibration.mmPerPixel : mm;
   const pxToMm = (px: number) => calibration.mmPerPixel ? px * calibration.mmPerPixel : px;
 
-  if (!image) {
+  if (!imageTop && !imageBottom) {
     return (
       <div className="flex-1 bg-gray-200 flex items-center justify-center text-gray-500">
         <p>No image loaded. Click the upload button to start.</p>
@@ -320,6 +335,9 @@ const CanvasView: React.FC = () => {
     if (['drawZone', 'drawBoundary', 'addComponent', 'calibrate'].includes(mode)) return 'crosshair';
     return 'default';
   };
+
+  const currentImage = heatmapViewMode === 'bottom' ? (bgImageBottom || bgImageTop) : (bgImageTop || bgImageBottom);
+  const currentImageDimensions = heatmapViewMode === 'bottom' ? (imageDimensionsBottom || imageDimensionsTop) : (imageDimensionsTop || imageDimensionsBottom);
 
   const stageWidth = window.innerWidth - 64 - 256;
   const stageHeight = window.innerHeight - 64;
@@ -382,28 +400,28 @@ const CanvasView: React.FC = () => {
             scaleY={stage.scale}
         >
           {/* Background to catch drag events for panning */}
-          {imageDimensions && (
+          {(imageDimensionsTop || imageDimensionsBottom) && (
             <Rect
-              width={imageDimensions.width}
-              height={imageDimensions.height}
+              width={Math.max(imageDimensionsTop?.width || 0, imageDimensionsBottom?.width || 0)}
+              height={Math.max(imageDimensionsTop?.height || 0, imageDimensionsBottom?.height || 0)}
               fill="transparent"
               listening={isSpacePressed || mode === 'pan'}
             />
           )}
-          {bgImage && <KonvaImage image={bgImage} listening={false} name="PCB_IMAGE" />}
+          {currentImage && <KonvaImage image={currentImage} listening={false} name="PCB_IMAGE" />}
 
-          {calibration.mmPerPixel && imageDimensions && (
-            <HeatmapOverlay width={imageDimensions.width} height={imageDimensions.height} />
+          {calibration.mmPerPixel && currentImageDimensions && (
+            <HeatmapOverlay width={currentImageDimensions.width} height={currentImageDimensions.height} />
           )}
 
           <SolverGridOverlay />
 
-          {heatmapResult && calibration.mmPerPixel && (
+          {heatmapResult && calibration.mmPerPixel && currentImageDimensions && (
             <Group name="HOTSPOTS" listening={false}>
                {/* Max Board Temp Hotspot */}
                {(() => {
-                  const cellWidthPx = imageDimensions!.width / heatmapResult.width;
-                  const cellHeightPx = imageDimensions!.height / heatmapResult.height;
+                  const cellWidthPx = currentImageDimensions.width / heatmapResult.width;
+                  const cellHeightPx = currentImageDimensions.height / heatmapResult.height;
 
                   let hotspots: { idx: number, label: string, color: string }[] = [];
 

@@ -8,7 +8,8 @@ const ExportLegend: React.FC = () => {
     const globalMaxTemperature = useStore(state => state.globalMaxTemperature);
     const manualHeatmapMaxTemperatureC = useStore(state => state.manualHeatmapMaxTemperatureC);
     const showConductivityMap = useStore(state => state.showConductivityMap);
-    const imageDimensions = useStore(state => state.imageDimensions);
+    const imageDimensionsTop = useStore(state => state.imageDimensionsTop);
+    const imageDimensionsBottom = useStore(state => state.imageDimensionsBottom);
     const ambientTemperature = useStore(state => state.ambientTemperature);
     const stackup = useStore(state => state.stackup);
     const detailedStackup = useStore(state => state.detailedStackup);
@@ -45,7 +46,8 @@ const ExportLegend: React.FC = () => {
         return { min: 25, max: 35, displayMin: 25, displayMax: 35, label: "Temp (°C)", colorMode: 'standard' as const };
     }, [heatmapResult, showConductivityMap, globalMaxTemperature, manualHeatmapMaxTemperatureC, heatmapViewMode]);
 
-    if (!imageDimensions || !heatmapResult) return null;
+    const currentDimensions = heatmapViewMode === 'bottom' ? (imageDimensionsBottom || imageDimensionsTop) : (imageDimensionsTop || imageDimensionsBottom);
+    if (!currentDimensions || !heatmapResult) return null;
 
     const exceedsScale = !showConductivityMap && heatmapResult.maxTemp > max;
     const baseK = estimateBaseConductivity(stackup, detailedStackup);

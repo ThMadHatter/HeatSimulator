@@ -20,11 +20,12 @@ const SolverGridOverlay: React.FC = () => {
 
     // The heatmap overlay uses image dimensions.
     // Let's get them from store to be sure.
-    const imageDimensions = useStore.getState().imageDimensions;
-    if (!imageDimensions) return null;
+    const { imageDimensionsTop, imageDimensionsBottom, heatmapViewMode } = useStore.getState();
+    const currentDimensions = heatmapViewMode === 'bottom' ? (imageDimensionsBottom || imageDimensionsTop) : (imageDimensionsTop || imageDimensionsBottom);
+    if (!currentDimensions) return null;
 
-    const dxPx = (imageDimensions.width) / nx;
-    const dyPx = (imageDimensions.height) / ny;
+    const dxPx = (currentDimensions.width) / nx;
+    const dyPx = (currentDimensions.height) / ny;
 
     const lines = [];
 
@@ -33,7 +34,7 @@ const SolverGridOverlay: React.FC = () => {
         lines.push(
             <Line
                 key={`v-${i}`}
-                points={[i * dxPx, 0, i * dxPx, imageDimensions.height]}
+                points={[i * dxPx, 0, i * dxPx, currentDimensions.height]}
                 stroke="white"
                 strokeWidth={0.5}
                 opacity={0.3}
@@ -47,7 +48,7 @@ const SolverGridOverlay: React.FC = () => {
         lines.push(
             <Line
                 key={`h-${j}`}
-                points={[0, j * dyPx, imageDimensions.width, j * dyPx]}
+                points={[0, j * dyPx, currentDimensions.width, j * dyPx]}
                 stroke="white"
                 strokeWidth={0.5}
                 opacity={0.3}
