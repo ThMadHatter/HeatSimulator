@@ -97,7 +97,18 @@ export function solveSteadyState(
         let cells: number[] = [];
         for (let j = startY; j <= endY; j++) {
             for (let i = startX; i <= endX; i++) {
-                cells.push(j * nx + i);
+                const cx = (i + 0.5) * dx;
+                const cy = (j + 0.5) * dx;
+
+                if (comp.shape === 'circle') {
+                    const radius = Math.max(comp.width, comp.height) / 2;
+                    const distSq = (cx - comp.x) ** 2 + (cy - comp.y) ** 2;
+                    if (distSq <= radius ** 2) {
+                        cells.push(j * nx + i);
+                    }
+                } else {
+                    cells.push(j * nx + i);
+                }
             }
         }
 

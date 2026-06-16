@@ -20,29 +20,31 @@ export interface CalibrationData {
 }
 
 /**
- * Converts screen coordinates (from PointerEvent) to Stage coordinates.
+ * Converts screen coordinates (from PointerEvent) to the coordinate system of the given node.
  */
-export const screenToStage = (screenPos: Point, stage: Konva.Stage): Point => {
-    const transform = stage.getAbsoluteTransform().copy().invert();
+export const screenToStage = (screenPos: Point, node: Konva.Node): Point => {
+    const transform = node.getAbsoluteTransform().copy().invert();
     return transform.point(screenPos);
 };
 
 /**
- * Converts Stage coordinates to screen coordinates.
+ * Converts coordinates from the node's system to screen coordinates.
  */
-export const stageToScreen = (stagePos: Point, stage: Konva.Stage): Point => {
-    const transform = stage.getAbsoluteTransform();
+export const stageToScreen = (stagePos: Point, node: Konva.Node): Point => {
+    const transform = node.getAbsoluteTransform();
     return transform.point(stagePos);
 };
 
 /**
- * Returns the position of the pointer relative to the stage's coordinate system,
- * accounting for scale and position. This is more robust than getRelativePointerPosition().
+ * Returns the position of the pointer relative to the given node's coordinate system,
+ * accounting for scale and position.
  */
-export const getRelativePointerPosition = (stage: Konva.Stage): Point | null => {
+export const getRelativePointerPosition = (node: Konva.Node): Point | null => {
+    const stage = node.getStage();
+    if (!stage) return null;
     const pointer = stage.getPointerPosition();
     if (!pointer) return null;
-    return screenToStage(pointer, stage);
+    return screenToStage(pointer, node);
 };
 
 /**

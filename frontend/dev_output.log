@@ -25,3 +25,57 @@ hmr update /src/style.css
 hmr update /src/style.css
 12:51:41 PM [vite] page reload dist/index.html
 12:59:53 PM [vite] page reload dist/index.html
+2:06:27 PM [vite] hmr update /src/components/CanvasView.tsx
+hmr update /src/style.css
+hmr update /src/style.css
+2:07:17 PM [vite] hmr update /src/components/CanvasView.tsx
+hmr update /src/style.css
+2:11:43 PM [vite] hmr update /src/components/CanvasView.tsx
+hmr update /src/style.css
+2:13:28 PM [vite] hmr update /src/components/PropertyPanel.tsx
+hmr update /src/style.css
+2:13:37 PM [vite] hmr update /src/components/FloatingPanels.tsx
+hmr update /src/style.css
+2:14:11 PM [vite] hmr update /src/components/Toolbar.tsx
+hmr update /src/style.css
+hmr update /src/components/CanvasView.tsx
+hmr update /src/style.css
+hmr update /src/components/StatusBar.tsx
+hmr update /src/style.css
+hmr update /src/components/PropertyPanel.tsx
+hmr update /src/style.css
+hmr update /src/components/CommandPalette.tsx
+hmr update /src/style.css
+hmr update /src/components/SolverGridOverlay.tsx
+hmr update /src/style.css
+hmr update /src/components/ExportDialog.tsx
+hmr update /src/style.css
+hmr update /src/components/HeatmapOverlay.tsx
+hmr update /src/style.css
+hmr update /src/components/PolygonEditor.tsx
+hmr update /src/style.css
+hmr update /src/components/ExportLegend.tsx
+hmr update /src/style.css
+hmr update /src/components/LayerManager.tsx
+hmr update /src/style.css
+hmr update /src/components/GettingStarted.tsx
+hmr update /src/style.css
+hmr update /src/style.css
+2:14:20 PM [vite] hmr update /src/components/Toolbar.tsx
+hmr update /src/style.css
+2:15:31 PM [vite] hmr update /src/components/CanvasView.tsx
+hmr update /src/style.css
+2:15:46 PM [vite] hmr update /src/components/CanvasView.tsx
+hmr update /src/style.css
+hmr update /src/components/HeatmapOverlay.tsx
+hmr update /src/style.css
+hmr update /src/components/ExportLegend.tsx
+hmr update /src/style.css
+hmr update /src/style.css
+hmr update /src/style.css
+2:15:53 PM [vite] hmr update /src/components/HeatmapOverlay.tsx
+hmr update /src/style.css
+2:16:35 PM [vite] hmr update /src/components/CanvasView.tsx
+hmr update /src/style.css
+2:18:53 PM [vite] page reload src/thermal/solver.test.ts
+2:21:48 PM [vite] page reload src/thermal/solver.test.ts

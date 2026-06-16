@@ -22,6 +22,11 @@ const HeatmapOverlay: React.FC<HeatmapOverlayProps> = ({ width, height }) => {
   const bottomImageOffset = useStore(state => state.bottomImageOffset);
   const bottomImageRotation = useStore(state => state.bottomImageRotation);
   const calibrationBottom = useStore(state => state.calibrationBottom);
+  const studyArea = useStore(state => state.studyArea);
+  const calibrationTop = useStore(state => state.calibrationTop);
+  const calibration = useStore(state => state.calibration);
+
+  const baseCal = calibrationTop.mmPerPixel ? calibrationTop : (calibrationBottom.mmPerPixel ? calibrationBottom : calibration);
 
   const { data, displayMin, displayMax, nx, ny, colorMode } = useMemo(() => {
     if (!heatmapResult || width <= 0 || height <= 0) {
@@ -90,12 +95,43 @@ const HeatmapOverlay: React.FC<HeatmapOverlayProps> = ({ width, height }) => {
     }
     ctx.putImageData(imageData, 0, 0);
 
+    // Post-processing to apply study area clipping if needed
+    if (studyArea.enabled) {
+        const dx = (nx > 0) ? (heatmapResult?.widthMm || 1) / nx : 1;
+        for (let j = 0; j < ny; j++) {
+            for (let i = 0; i < nx; i++) {
+                const cx = (i + 0.5) * dx;
+                const cy = (j + 0.5) * dx;
+                let inside = true;
+
+                if (studyArea.shape === 'circle') {
+                    const radius = Math.max(studyArea.rectMm.width, studyArea.rectMm.height) / 2;
+                    const centerX = studyArea.rectMm.x + studyArea.rectMm.width/2;
+                    const centerY = studyArea.rectMm.y + studyArea.rectMm.height/2;
+                    const distSq = (cx - centerX) ** 2 + (cy - centerY) ** 2;
+                    if (distSq > radius ** 2) inside = false;
+                } else {
+                    if (cx < studyArea.rectMm.x || cx > studyArea.rectMm.x + studyArea.rectMm.width ||
+                        cy < studyArea.rectMm.y || cy > studyArea.rectMm.y + studyArea.rectMm.height) {
+                        inside = false;
+                    }
+                }
+
+                if (!inside) {
+                    imageData.data[(j * nx + i) * 4 + 3] = 0; // Transparent
+                }
+            }
+        }
+    }
+
+    ctx.putImageData(imageData, 0, 0);
+
     const image = new Image();
     image.onload = () => {
         setHeatmapImg(image);
     };
     image.src = canvas.toDataURL();
-  }, [data, displayMin, displayMax, nx, ny]);
+  }, [data, displayMin, displayMax, nx, ny, studyArea, heatmapResult]);
 
   if (!heatmapImg) return null;
 

@@ -3,6 +3,7 @@ import { useStore } from '../store/useStore';
 import { DraggableCard } from './DraggableCard';
 import { GettingStarted } from './GettingStarted';
 import { LayerManager } from './LayerManager';
+import { HeatmapViewCard } from './HeatmapViewCard';
 import { Info, Thermometer, Palette, Settings, Layers, Bug } from 'lucide-react';
 
 export const FloatingPanels: React.FC = () => {
@@ -15,6 +16,8 @@ export const FloatingPanels: React.FC = () => {
             <DraggableCard id="layers" title="Layer Manager" initialPosition={{ x: 80, y: 300 }}>
                 <LayerManager />
             </DraggableCard>
+
+            <HeatmapViewCard />
         </>
     );
 };

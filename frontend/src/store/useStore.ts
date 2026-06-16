@@ -14,6 +14,7 @@ export interface Component {
   thetaJC?: number; // °C/W
   maxTemperature?: number; // °C
   side?: 'top' | 'bottom';
+  shape?: 'rect' | 'circle';
 }
 
 export interface Calibration {
@@ -88,6 +89,7 @@ interface State {
 
   studyArea: {
     enabled: boolean;
+    shape: 'rect' | 'circle';
     rectMm: { x: number, y: number, width: number, height: number };
   };
 
@@ -192,6 +194,7 @@ export const useStore = create<State>((set) => ({
   },
   studyArea: {
     enabled: false,
+    shape: 'rect',
     rectMm: { x: 0, y: 0, width: 50, height: 50 }
   },
   layers: {

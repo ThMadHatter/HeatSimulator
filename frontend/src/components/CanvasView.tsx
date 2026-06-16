@@ -6,6 +6,8 @@ import SolverGridOverlay from './SolverGridOverlay';
 import ExportLegend from './ExportLegend';
 import { PolygonEditor } from './PolygonEditor';
 import { NavigationControls } from './NavigationControls';
+import { CalibrationInput } from './CalibrationInput';
+import { SelectionPopover } from './SelectionPopover';
 import { KonvaEventObject } from 'konva/lib/Node';
 import { computeHeatmap } from '../thermal';
 import Konva from 'konva';
@@ -254,7 +256,11 @@ const CanvasView: React.FC = () => {
 
   const handleMouseMove = (e: any) => {
     const stageObj = e.target.getStage();
-    const pointer = Coords.getRelativePointerPosition(stageObj);
+    if (!stageObj) return;
+
+    // Use the main interactive layer for coordinate conversion
+    const layer = stageObj.findOne('.mainLayer') || stageObj;
+    const pointer = Coords.getRelativePointerPosition(layer);
     if (!pointer) return;
 
     let temp = ambientTemperature;
@@ -331,7 +337,9 @@ const CanvasView: React.FC = () => {
     logPointer("StageClick", e);
     const stageObj = e.target.getStage();
     if (!stageObj) return;
-    const pos = Coords.getRelativePointerPosition(stageObj);
+
+    const layer = stageObj.findOne('.mainLayer') || stageObj;
+    const pos = Coords.getRelativePointerPosition(layer);
     if (!pos) return;
 
     const pointMm = Coords.stageToMm(pos, baseCal);
@@ -369,7 +377,9 @@ const CanvasView: React.FC = () => {
         power: 1.0,
         thetaJA: 40,
         maxTemperature: 125,
+        shape: (window as any).nextComponentShape || 'rect'
       };
+      delete (window as any).nextComponentShape;
       addComponent(newComp);
       setSelection({ type: 'component', id: newComp.id });
       setMode('select');
@@ -479,6 +489,7 @@ const CanvasView: React.FC = () => {
             y={stage.y}
             scaleX={stage.scale}
             scaleY={stage.scale}
+            name="mainLayer"
         >
           {/* Background to catch drag events for panning */}
           {(imageDimensionsTop || imageDimensionsBottom) && (
@@ -642,25 +653,47 @@ const CanvasView: React.FC = () => {
 
             <Group name="GEOMETRY" listening={!layers.components.locked || !layers.zones.locked || !layers.boundary.locked}>
                 {studyArea.enabled && (
-                    <Rect
-                        x={mmToPx(studyArea.rectMm.x)}
-                        y={mmToPx(studyArea.rectMm.y)}
-                        width={mmToPx(studyArea.rectMm.width)}
-                        height={mmToPx(studyArea.rectMm.height)}
-                        stroke="#8b5cf6"
-                        strokeWidth={2 / stage.scale}
-                        dash={[5, 5]}
-                        draggable
-                        onDragEnd={(e) => {
-                            setStudyArea({
-                                rectMm: {
-                                    ...studyArea.rectMm,
-                                    x: pxToMm(e.target.x()),
-                                    y: pxToMm(e.target.y()),
-                                }
-                            });
-                        }}
-                    />
+                    studyArea.shape === 'circle' ? (
+                        <Circle
+                            x={mmToPx(studyArea.rectMm.x + studyArea.rectMm.width/2)}
+                            y={mmToPx(studyArea.rectMm.y + studyArea.rectMm.height/2)}
+                            radius={mmToPx(Math.max(studyArea.rectMm.width, studyArea.rectMm.height) / 2)}
+                            stroke="#8b5cf6"
+                            strokeWidth={2 / stage.scale}
+                            dash={[5, 5]}
+                            draggable
+                            onDragEnd={(e) => {
+                                const r = Math.max(studyArea.rectMm.width, studyArea.rectMm.height) / 2;
+                                setStudyArea({
+                                    rectMm: {
+                                        ...studyArea.rectMm,
+                                        x: pxToMm(e.target.x()) - r,
+                                        y: pxToMm(e.target.y()) - r,
+                                    }
+                                });
+                            }}
+                        />
+                    ) : (
+                        <Rect
+                            x={mmToPx(studyArea.rectMm.x)}
+                            y={mmToPx(studyArea.rectMm.y)}
+                            width={mmToPx(studyArea.rectMm.width)}
+                            height={mmToPx(studyArea.rectMm.height)}
+                            stroke="#8b5cf6"
+                            strokeWidth={2 / stage.scale}
+                            dash={[5, 5]}
+                            draggable
+                            onDragEnd={(e) => {
+                                setStudyArea({
+                                    rectMm: {
+                                        ...studyArea.rectMm,
+                                        x: pxToMm(e.target.x()),
+                                        y: pxToMm(e.target.y()),
+                                    }
+                                });
+                            }}
+                        />
+                    )
                 )}
                 {pcbBoundary && layers.boundary.visible && <PolygonEditor shape={pcbBoundary} mmToPx={mmToPx} pxToMm={pxToMm} />}
                 {zones.filter(z => z.type !== 'pcbBoundary').map(zone => (
@@ -726,23 +759,47 @@ const CanvasView: React.FC = () => {
                             setSelection({ type: 'component', id: comp.id });
                         }}
                     >
-                        <Rect x={-pxW/2} y={-pxH/2} width={pxW} height={pxH} fill="transparent"
-                            stroke={isSelected ? "#3b82f6" : statusColor} strokeWidth={isSelected ? 4 / stage.scale : 2 / stage.scale} opacity={0.8}
-                            dash={comp.side === 'bottom' ? [4, 2] : undefined}
-                            hitStrokeWidth={Math.max(10, 20 / stage.scale)}
-                            onMouseEnter={(e) => {
-                                if (mode === 'select' && !layers.components.locked) {
-                                    const s = e.target.getStage();
-                                    if (s) s.container().style.cursor = 'move';
-                                }
-                            }}
-                            onMouseLeave={(e) => {
-                                if (mode === 'select') {
-                                    const s = e.target.getStage();
-                                    if (s) s.container().style.cursor = getCursor();
-                                }
-                            }}
-                        />
+                        {comp.shape === 'circle' ? (
+                            <Circle
+                                radius={pxW / 2}
+                                fill="transparent"
+                                stroke={isSelected ? "#3b82f6" : statusColor}
+                                strokeWidth={isSelected ? 4 / stage.scale : 2 / stage.scale}
+                                opacity={0.8}
+                                dash={comp.side === 'bottom' ? [4, 2] : undefined}
+                                hitStrokeWidth={Math.max(10, 20 / stage.scale)}
+                                onMouseEnter={(e) => {
+                                    if (mode === 'select' && !layers.components.locked) {
+                                        const s = e.target.getStage();
+                                        if (s) s.container().style.cursor = 'move';
+                                    }
+                                }}
+                                onMouseLeave={(e) => {
+                                    if (mode === 'select') {
+                                        const s = e.target.getStage();
+                                        if (s) s.container().style.cursor = getCursor();
+                                    }
+                                }}
+                            />
+                        ) : (
+                            <Rect x={-pxW/2} y={-pxH/2} width={pxW} height={pxH} fill="transparent"
+                                stroke={isSelected ? "#3b82f6" : statusColor} strokeWidth={isSelected ? 4 / stage.scale : 2 / stage.scale} opacity={0.8}
+                                dash={comp.side === 'bottom' ? [4, 2] : undefined}
+                                hitStrokeWidth={Math.max(10, 20 / stage.scale)}
+                                onMouseEnter={(e) => {
+                                    if (mode === 'select' && !layers.components.locked) {
+                                        const s = e.target.getStage();
+                                        if (s) s.container().style.cursor = 'move';
+                                    }
+                                }}
+                                onMouseLeave={(e) => {
+                                    if (mode === 'select') {
+                                        const s = e.target.getStage();
+                                        if (s) s.container().style.cursor = getCursor();
+                                    }
+                                }}
+                            />
+                        )}
                         <Circle radius={8 / stage.scale} fill={statusColor} opacity={(junction?.isOverLimit || (junction?.ratingPercent && junction.ratingPercent > 90)) ? opacity : 1}
                         stroke="white" strokeWidth={2 / stage.scale} shadowBlur={junction?.isOverLimit ? 10 : 0} shadowColor="red" />
                         <Text text={label} fontSize={9 / stage.scale} fill="white" fontStyle="bold" y={pxH/2 + 5 / stage.scale} align="center" width={120 / stage.scale} x={-60 / stage.scale} shadowColor="black" shadowBlur={2} shadowOffset={{x:1, y:1}} shadowOpacity={1} listening={false} />
@@ -844,6 +901,22 @@ const CanvasView: React.FC = () => {
               <span className="text-gray-400">Delete:</span> <span>Remove</span>
           </div>
       </div>
+
+      {mode === 'calibrate' && calibration.point1 && calibration.point2 && (
+        <CalibrationInput
+          p1={calibration.point1}
+          p2={calibration.point2}
+          stageScale={stage.scale}
+          stageOffset={{ x: stage.x, y: stage.y }}
+        />
+      )}
+
+      {mode === 'select' && selection && (
+        <SelectionPopover
+          stageScale={stage.scale}
+          stageOffset={{ x: stage.x, y: stage.y }}
+        />
+      )}
     </div>
   );
 };

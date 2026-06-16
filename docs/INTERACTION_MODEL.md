@@ -3,13 +3,14 @@
 ## Tool Modes
 | Mode | Action | Result |
 |---|---|---|
-| **Select (V)** | Left Click | Select object under cursor |
+| **Select (V)** | Left Click | Select object under cursor. Shows Selection Popover. |
 | | Left Drag | Move selected component or vertex |
 | **Pan (H)** | Left Drag | Pan stage |
 | **Draw (B/Z)** | Left Click | Add vertex to polygon |
 | | Double Click | Close/finish polygon |
-| **Add (A)** | Left Click | Place component |
-| **Calibrate (C)**| Left Click | Set calibration points (2 max) |
+| **Add (A)** | Left Click | Place component. Submenu (hover) allows Rect/Circle selection. |
+| **Calibrate (C)**| Left Click | Set calibration points (2 max). Shows on-canvas dimension input. |
+| **Study Area** | Toggle | Define visualization/export bounds. Submenu allows Rect/Circle shapes. |
 
 ## Mouse Behaviors
 - **Hover**: Objects highlight or show handles when selectable.
@@ -45,6 +46,7 @@
 5. **Heatmap/Grid**: Non-interactive (`listening={false}`).
 
 ## UI Panels
-- **Draggable Cards**: Sidebars can be moved.
+- **Draggable Cards**: Floating panels like Layer Manager, Getting Started, and Heatmap View can be moved and collapsed.
+- **Selection Popover**: Appears above selected objects for quick shape/side/delete actions.
 - **Z-Index**: Active card or selected object handle always on top.
 - **Focus**: Inputs capture keyboard; shortcuts disabled during typing.
