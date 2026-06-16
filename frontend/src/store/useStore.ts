@@ -70,7 +70,26 @@ interface State {
   heatmapViewMode: HeatmapViewMode;
   manualHeatmapMaxTemperatureC: number | null;
   debugPointerEvents: boolean;
+  debugCoords: boolean;
   stageRef: Konva.Stage | null;
+
+  layers: {
+    heatmap: { visible: boolean; locked: boolean };
+    components: { visible: boolean; locked: boolean };
+    zones: { visible: boolean; locked: boolean };
+    boundary: { visible: boolean; locked: boolean };
+    grid: { visible: boolean; locked: boolean };
+  };
+
+  navigation: {
+    zoom: number;
+    cursorMm: { x: number; y: number } | null;
+  };
+
+  studyArea: {
+    enabled: boolean;
+    rectMm: { x: number, y: number, width: number, height: number };
+  };
 
   // Actions
   setImage: (image: string | null, width?: number, height?: number) => void;
@@ -109,6 +128,10 @@ interface State {
   setHeatmapViewMode: (mode: HeatmapViewMode) => void;
   setManualHeatmapMaxTemperatureC: (temp: number | null) => void;
   setDebugPointerEvents: (enabled: boolean) => void;
+  setDebugCoords: (enabled: boolean) => void;
+  setLayerState: (layer: keyof State['layers'], updates: Partial<State['layers']['heatmap']>) => void;
+  setNavigation: (nav: Partial<State['navigation']>) => void;
+  setStudyArea: (studyArea: Partial<State['studyArea']>) => void;
   setStageRef: (ref: Konva.Stage | null) => void;
 }
 
@@ -162,6 +185,22 @@ export const useStore = create<State>((set) => ({
   heatmapViewMode: 'top',
   manualHeatmapMaxTemperatureC: null,
   debugPointerEvents: false,
+  debugCoords: false,
+  navigation: {
+    zoom: 1,
+    cursorMm: null,
+  },
+  studyArea: {
+    enabled: false,
+    rectMm: { x: 0, y: 0, width: 50, height: 50 }
+  },
+  layers: {
+    heatmap: { visible: true, locked: false },
+    components: { visible: true, locked: false },
+    zones: { visible: true, locked: false },
+    boundary: { visible: true, locked: false },
+    grid: { visible: false, locked: true },
+  },
   stageRef: null,
 
   setImage: (image, width, height) => set({
@@ -306,6 +345,15 @@ export const useStore = create<State>((set) => ({
   }),
   setManualHeatmapMaxTemperatureC: (manualHeatmapMaxTemperatureC) => set({ manualHeatmapMaxTemperatureC }),
   setDebugPointerEvents: (debugPointerEvents) => set({ debugPointerEvents }),
+  setDebugCoords: (debugCoords) => set({ debugCoords }),
+  setLayerState: (layer, updates) => set((state) => ({
+    layers: {
+        ...state.layers,
+        [layer]: { ...state.layers[layer], ...updates }
+    }
+  })),
+  setNavigation: (updates) => set((state) => ({ navigation: { ...state.navigation, ...updates } })),
+  setStudyArea: (updates) => set((state) => ({ studyArea: { ...state.studyArea, ...updates } })),
   setStageRef: (stageRef) => set({ stageRef }),
 }));
 

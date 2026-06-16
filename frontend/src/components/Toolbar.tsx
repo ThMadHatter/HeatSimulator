@@ -1,11 +1,13 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useStore } from '../store/useStore';
-import { Upload, Ruler, Plus, MousePointer2, Square, Trash2, Scan, Zap, Hand, Edit3 } from 'lucide-react';
+import { Upload, Ruler, Plus, MousePointer2, Square, Trash2, Scan, Zap, Hand, Edit3, Download, Target } from 'lucide-react';
 import { SelectImage, LoadImage } from '../../wailsjs/go/main/App';
 import { detectPCBOutline, isOpenCVReady } from '../thermal/edgeDetection';
+import { ExportDialog } from './ExportDialog';
 
 const Toolbar: React.FC = () => {
-  const { mode, setMode, selection, setImageSide, image, calibration, calibrationTop, calibrationBottom, heatmapViewMode, addZone, removeZone, zones, clearSelection } = useStore();
+  const { mode, setMode, selection, setImageSide, image, calibration, calibrationTop, calibrationBottom, heatmapViewMode, addZone, removeZone, zones, clearSelection, studyArea, setStudyArea } = useStore();
+  const [showExport, setShowExport] = useState(false);
 
   const handleLoadImage = async (side: 'top' | 'bottom') => {
     try {
@@ -60,7 +62,9 @@ const Toolbar: React.FC = () => {
 
   const changeMode = (newMode: any) => {
     setMode(newMode);
-    if (!['editZone', 'editBoundary', 'select'].includes(newMode)) clearSelection();
+    if (['drawZone', 'drawBoundary', 'addComponent', 'calibrate'].includes(newMode)) {
+        clearSelection();
+    }
   };
 
   const handleEdit = () => {
@@ -91,14 +95,21 @@ const Toolbar: React.FC = () => {
       <button onClick={() => changeMode('drawBoundary')} className={`p-2 rounded transition-colors ${mode === 'drawBoundary' ? 'bg-blue-600' : 'hover:bg-gray-700'}`} title="Draw PCB Boundary (B)"><Square size={24} /></button>
       <button onClick={handleAutoDetect} className="p-2 rounded hover:bg-gray-700 transition-colors" title="Auto-detect PCB Boundary"><Scan size={24} /></button>
       <button onClick={() => changeMode('addComponent')} className={`p-2 rounded transition-colors ${mode === 'addComponent' ? 'bg-blue-600' : 'hover:bg-gray-700'}`} title="Add Component (A)"><Plus size={24} /></button>
+      <button onClick={() => setStudyArea({ enabled: !studyArea.enabled })} className={`p-2 rounded transition-colors ${studyArea.enabled ? 'bg-purple-600' : 'hover:bg-gray-700'}`} title="Study Area Tool"><Target size={24} /></button>
       <div className="flex flex-col gap-1 items-center">
           <button onClick={() => changeMode('calibrate')} className={`p-2 rounded transition-colors ${mode === 'calibrate' ? 'bg-blue-600' : 'hover:bg-gray-700'} relative`} title="Calibrate Scale (C)">
               <Ruler size={24} />
               {calibrationTop.mmPerPixel && <span className="absolute top-0 right-0 w-2 h-2 bg-blue-500 rounded-full border border-gray-800" title="Top Calibrated"></span>}
               {calibrationBottom.mmPerPixel && <span className="absolute bottom-0 right-0 w-2 h-2 bg-green-500 rounded-full border border-gray-800" title="Bottom Calibrated"></span>}
           </button>
-          <span className="text-[8px] font-bold text-gray-400 uppercase">{heatmapViewMode === 'bottom' ? 'Bot' : 'Top'}</span>
+          <span className="text-[8px] font-bold text-gray-400 uppercase">{(heatmapViewMode as string) === 'bottom' ? 'Bot' : 'Top'}</span>
       </div>
+      <div className="w-full h-px bg-gray-700 my-1" />
+      <button onClick={() => setShowExport(true)} className="p-2 rounded hover:bg-gray-700 transition-colors text-blue-400" title="Export Image">
+          <Download size={24} />
+      </button>
+
+      {showExport && <ExportDialog onClose={() => setShowExport(false)} />}
     </div>
   );
 };
