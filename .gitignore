@@ -1,3 +1,21 @@
-build/bin
-node_modules
-frontend/dist
+# Wails build artifacts
+build/bin/
+build/windows/
+build/darwin/
+build/linux/
+
+# Frontend artifacts
+frontend/dist/
+frontend/node_modules/
+frontend/playwright-report/
+frontend/test-results/
+frontend/*.log
+
+# Project logs and temp files
+*.log
+dev_output.log
+test-results/
+playwright-report/
+
+# OS files
+.DS_Store

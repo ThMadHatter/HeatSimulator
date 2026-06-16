@@ -5,11 +5,15 @@ import HeatmapOverlay from './HeatmapOverlay';
 import SolverGridOverlay from './SolverGridOverlay';
 import ExportLegend from './ExportLegend';
 import { PolygonEditor } from './PolygonEditor';
+import { NavigationControls } from './NavigationControls';
+import { CalibrationInput } from './CalibrationInput';
+import { SelectionPopover } from './SelectionPopover';
 import { KonvaEventObject } from 'konva/lib/Node';
 import { computeHeatmap } from '../thermal';
 import Konva from 'konva';
 import { Zone, Point, PolygonType } from '../thermal/types';
 import { isPointInPolygon } from '../thermal/utils';
+import * as Coords from '../thermal/coords';
 
 const CanvasView: React.FC = () => {
   const imageTop = useStore(state => state.imageTop);
@@ -18,6 +22,7 @@ const CanvasView: React.FC = () => {
   const imageDimensionsBottom = useStore(state => state.imageDimensionsBottom);
   const mode = useStore(state => state.mode);
   const setMode = useStore(state => state.setMode);
+  const layers = useStore(state => state.layers);
   const components = useStore(state => state.components);
   const addComponent = useStore(state => state.addComponent);
   const updateComponent = useStore(state => state.updateComponent);
@@ -41,6 +46,10 @@ const CanvasView: React.FC = () => {
   const setHeatmapResult = useStore(state => state.setHeatmapResult);
   const setStageRef = useStore(state => state.setStageRef);
   const debugPointerEvents = useStore(state => state.debugPointerEvents);
+  const debugCoords = useStore(state => state.debugCoords);
+  const setNavigation = useStore(state => state.setNavigation);
+  const studyArea = useStore(state => state.studyArea);
+  const setStudyArea = useStore(state => state.setStudyArea);
 
   const bottomImageOffset = useStore(state => state.bottomImageOffset);
   const setBottomImageOffset = useStore(state => state.setBottomImageOffset);
@@ -57,6 +66,30 @@ const CanvasView: React.FC = () => {
   const [bgImageTop, setBgImageTop] = useState<HTMLImageElement | null>(null);
   const [bgImageBottom, setBgImageBottom] = useState<HTMLImageElement | null>(null);
   const stageRef = useRef<Konva.Stage>(null);
+
+  const handleFitToScreen = useCallback(() => {
+    if (!stageRef.current) return;
+    const stageObj = stageRef.current;
+    const width = stageObj.width();
+    const height = stageObj.height();
+    const padding = 50;
+
+    const currentDimensions = (heatmapViewMode as any) === "bottom" ? (imageDimensionsBottom || imageDimensionsTop) : (imageDimensionsTop || imageDimensionsBottom);
+    if (!currentDimensions) return;
+
+    const scale = Math.min(
+      (width - padding * 2) / currentDimensions.width,
+      (height - padding * 2) / currentDimensions.height
+    );
+
+    setStage({
+      scale,
+      x: (width - currentDimensions.width * scale) / 2,
+      y: (height - currentDimensions.height * scale) / 2
+    });
+    setNavigation({ zoom: scale });
+  }, [imageDimensionsTop, imageDimensionsBottom, heatmapViewMode, setNavigation]);
+
   const [opacity, setOpacity] = useState(1);
 
   const pcbBoundary = useMemo(() => zones.find(z => z.type === 'pcbBoundary'), [zones]);
@@ -79,6 +112,13 @@ const CanvasView: React.FC = () => {
         }
         if (e.key === 'v' || e.key === 'V') setMode('select');
         if (e.key === 'h' || e.key === 'H') setMode('pan');
+        if ((e.key === 'f' || e.key === 'F') || (e.key === '0' && (e.ctrlKey || e.metaKey))) {
+            handleFitToScreen();
+        }
+        if (e.key === '1' && (e.ctrlKey || e.metaKey)) {
+            setStage({ scale: 1, x: 0, y: 0 });
+            setNavigation({ zoom: 1 });
+        }
         if (e.key === 'c' || e.key === 'C') { setMode('calibrate'); clearSelection(); }
         if (e.key === 'b' || e.key === 'B') { setMode('drawBoundary'); setDrawingPoints([]); clearSelection(); }
         if (e.key === 'z' || e.key === 'Z') { setMode('drawZone'); setDrawingPoints([]); clearSelection(); }
@@ -150,7 +190,7 @@ const CanvasView: React.FC = () => {
         window.removeEventListener('keydown', handleKeyDown);
         window.removeEventListener('keyup', handleKeyUp);
     };
-  }, [selection, zones, mode, drawingPoints, setMode, clearSelection, removeComponent, removeZone, updateZone, addZone, setSelection]);
+  }, [selection, zones, mode, drawingPoints, setMode, clearSelection, removeComponent, removeZone, updateZone, addZone, setSelection, handleFitToScreen, setNavigation]);
 
   useEffect(() => {
     const anim = new Konva.Animation((frame) => {
@@ -208,20 +248,19 @@ const CanvasView: React.FC = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [components, zones, imageDimensionsTop, imageDimensionsBottom, calibrationTop.mmPerPixel, calibrationBottom.mmPerPixel, ambientTemperature, stackup, setHeatmapResult]);
 
-  // mmToPx uses the "Base Calibration" (Top if available) for consistent stage scaling
-  const baseCal = calibrationTop.mmPerPixel ? calibrationTop : (calibrationBottom.mmPerPixel ? calibrationBottom : calibration);
+  // baseCal uses the "Base Calibration" (Top if available) for consistent stage scaling
+  const baseCal = useMemo(() => calibrationTop.mmPerPixel ? calibrationTop : (calibrationBottom.mmPerPixel ? calibrationBottom : calibration), [calibrationTop, calibrationBottom, calibration]);
 
-  const mmToPx = useCallback((mm: number) => {
-    return baseCal.mmPerPixel ? mm / baseCal.mmPerPixel : mm;
-  }, [baseCal]);
-
-  const pxToMm = useCallback((px: number) => {
-    return baseCal.mmPerPixel ? px * baseCal.mmPerPixel : px;
-  }, [baseCal]);
+  const mmToPx = useCallback((mm: number) => Coords.mmToPx(mm, baseCal), [baseCal]);
+  const pxToMm = useCallback((px: number) => Coords.pxToMm(px, baseCal), [baseCal]);
 
   const handleMouseMove = (e: any) => {
     const stageObj = e.target.getStage();
-    const pointer = stageObj.getRelativePointerPosition();
+    if (!stageObj) return;
+
+    // Use the main interactive layer for coordinate conversion
+    const layer = stageObj.findOne('.mainLayer') || stageObj;
+    const pointer = Coords.getRelativePointerPosition(layer);
     if (!pointer) return;
 
     let temp = ambientTemperature;
@@ -232,22 +271,21 @@ const CanvasView: React.FC = () => {
     let mmY = 0;
 
     if (baseCal.mmPerPixel) {
-        mmX = pointer.x * baseCal.mmPerPixel;
-        mmY = pointer.y * baseCal.mmPerPixel;
+        const mmPos = Coords.stageToMm(pointer, baseCal);
+        mmX = mmPos.x;
+        mmY = mmPos.y;
 
         if (heatmapResult) {
-            const dx = heatmapResult.widthMm / heatmapResult.width;
-            const gridX = Math.floor(mmX / dx);
-            const gridY = Math.floor(mmY / dx);
-            if (gridX >= 0 && gridX < heatmapResult.width && gridY >= 0 && gridY < heatmapResult.height) {
-                const idx = gridY * heatmapResult.width + gridX;
+            const { ix, iy } = Coords.mmToGrid(mmPos, heatmapResult.widthMm, heatmapResult.heightMm, heatmapResult.width, heatmapResult.height);
+            if (ix >= 0 && ix < heatmapResult.width && iy >= 0 && iy < heatmapResult.height) {
+                const idx = iy * heatmapResult.width + ix;
                 tTop = heatmapResult.TTop[idx];
                 tBottom = heatmapResult.TBottom[idx];
                 k = heatmapResult.kGrid[idx];
 
-                if (heatmapViewMode === 'top') temp = tTop;
-                else if (heatmapViewMode === 'bottom') temp = tBottom;
-                else if (heatmapViewMode === 'difference') temp = tTop - tBottom;
+                if ((heatmapViewMode as any) === "top") temp = tTop;
+                else if ((heatmapViewMode as any) === "bottom") temp = tBottom;
+                else if ((heatmapViewMode as any) === "difference") temp = tTop - tBottom;
                 else temp = Math.max(tTop, tBottom);
             }
         }
@@ -255,6 +293,7 @@ const CanvasView: React.FC = () => {
 
     setMousePos({ x: pointer.x, y: pointer.y, mmX, mmY, temp, tTop, tBottom, k });
     setCursorPos({ x: mmX, y: mmY });
+    setNavigation({ cursorMm: { x: mmX, y: mmY } });
   };
 
   const handleWheel = (e: KonvaEventObject<WheelEvent>) => {
@@ -263,36 +302,50 @@ const CanvasView: React.FC = () => {
     const stageObj = stageRef.current;
     if (!stageObj) return;
 
-    const oldScale = stageObj.scaleX();
+    const oldScale = stage.scale;
     const pointer = stageObj.getPointerPosition();
     if (!pointer) return;
 
     const mousePointTo = {
-      x: (pointer.x - stageObj.x()) / oldScale,
-      y: (pointer.y - stageObj.y()) / oldScale,
+      x: (pointer.x - stage.x) / oldScale,
+      y: (pointer.y - stage.y) / oldScale,
     };
 
-    const newScale = e.evt.deltaY < 0 ? oldScale * scaleBy : oldScale / scaleBy;
+    let newScale = oldScale;
+    if (e.evt.ctrlKey || e.evt.metaKey) {
+        newScale = e.evt.deltaY < 0 ? oldScale * scaleBy : oldScale / scaleBy;
+    } else {
+        setStage({
+            ...stage,
+            y: stage.y - e.evt.deltaY,
+            x: stage.x - e.evt.deltaX,
+        });
+        return;
+    }
+
+    newScale = Math.max(0.05, Math.min(newScale, 50));
 
     setStage({
       scale: newScale,
       x: pointer.x - mousePointTo.x * newScale,
       y: pointer.y - mousePointTo.y * newScale,
     });
+    setNavigation({ zoom: newScale });
   };
 
   const handleStageClick = (e: KonvaEventObject<MouseEvent>) => {
     logPointer("StageClick", e);
     const stageObj = e.target.getStage();
     if (!stageObj) return;
-    const pos = stageObj.getRelativePointerPosition();
+
+    const layer = stageObj.findOne('.mainLayer') || stageObj;
+    const pos = Coords.getRelativePointerPosition(layer);
     if (!pos) return;
 
-    const mmX = pos.x * (baseCal.mmPerPixel || 1);
-    const mmY = pos.y * (baseCal.mmPerPixel || 1);
-    const pointMm = { x: mmX, y: mmY };
+    const pointMm = Coords.stageToMm(pos, baseCal);
 
     if (mode === 'calibrate') {
+      // For calibration, we need stage coordinates
       setCalibrationPoint({ x: pos.x, y: pos.y });
       return;
     }
@@ -324,7 +377,9 @@ const CanvasView: React.FC = () => {
         power: 1.0,
         thetaJA: 40,
         maxTemperature: 125,
+        shape: (window as any).nextComponentShape || 'rect'
       };
+      delete (window as any).nextComponentShape;
       addComponent(newComp);
       setSelection({ type: 'component', id: newComp.id });
       setMode('select');
@@ -339,8 +394,28 @@ const CanvasView: React.FC = () => {
 
   if (!imageTop && !imageBottom) {
     return (
-      <div className="flex-1 bg-gray-200 flex items-center justify-center text-gray-500">
+      <div className="flex-1 bg-gray-200 flex flex-col items-center justify-center text-gray-500 relative">
         <p>No image loaded. Click the upload button to start.</p>
+        <div className="absolute bottom-4 left-4 z-50">
+            <NavigationControls
+                zoom={stage.scale}
+                onZoomIn={() => {
+                    const newScale = stage.scale * 1.2;
+                    setStage(s => ({ ...s, scale: newScale }));
+                    setNavigation({ zoom: newScale });
+                }}
+                onZoomOut={() => {
+                    const newScale = stage.scale / 1.2;
+                    setStage(s => ({ ...s, scale: newScale }));
+                    setNavigation({ zoom: newScale });
+                }}
+                onFit={() => {}}
+                onReset={() => {
+                    setStage({ scale: 1, x: 0, y: 0 });
+                    setNavigation({ zoom: 1 });
+                }}
+            />
+        </div>
       </div>
     );
   }
@@ -349,7 +424,7 @@ const CanvasView: React.FC = () => {
 
   const getCursor = () => {
     if (isSpacePressed) return 'grabbing';
-    if (mode === 'pan' || heatmapViewMode === 'align') return 'grab';
+    if (mode === 'pan' || (heatmapViewMode as any) === 'align') return 'grab';
     if (['drawZone', 'drawBoundary', 'addComponent', 'calibrate'].includes(mode)) return 'crosshair';
     return 'default';
   };
@@ -357,7 +432,7 @@ const CanvasView: React.FC = () => {
   const stageWidth = window.innerWidth - 64 - 256;
   const stageHeight = window.innerHeight - 64;
 
-  const currentDimensions = heatmapViewMode === 'bottom' ? (imageDimensionsBottom || imageDimensionsTop) : (imageDimensionsTop || imageDimensionsBottom);
+  const currentDimensions = (heatmapViewMode as any) === 'bottom' ? (imageDimensionsBottom || imageDimensionsTop) : (imageDimensionsTop || imageDimensionsBottom);
 
   return (
     <div className="flex-1 bg-gray-300 relative overflow-hidden" style={{ cursor: getCursor() }}>
@@ -414,6 +489,7 @@ const CanvasView: React.FC = () => {
             y={stage.y}
             scaleX={stage.scale}
             scaleY={stage.scale}
+            name="mainLayer"
         >
           {/* Background to catch drag events for panning */}
           {(imageDimensionsTop || imageDimensionsBottom) && (
@@ -426,17 +502,17 @@ const CanvasView: React.FC = () => {
           )}
 
           {/* Top Image (Reference) */}
-          {bgImageTop && (heatmapViewMode !== 'bottom' || heatmapViewMode === 'align') && (
+          {bgImageTop && ((heatmapViewMode as any) !== 'bottom' || (heatmapViewMode as any) === 'align') && (
               <KonvaImage
                 image={bgImageTop}
-                opacity={heatmapViewMode === 'align' ? 0.5 : 1}
+                opacity={(heatmapViewMode as any) === 'align' ? 0.5 : 1}
                 listening={false}
                 name="PCB_IMAGE_TOP"
               />
           )}
 
           {/* Bottom Image (Transformed) */}
-          {bgImageBottom && (heatmapViewMode === 'bottom' || heatmapViewMode === 'align') && (
+          {bgImageBottom && ((heatmapViewMode as any) === 'bottom' || (heatmapViewMode as any) === 'align') && (
               <KonvaImage
                   image={bgImageBottom}
                   x={mmToPx(bottomImageOffset.x)}
@@ -446,8 +522,8 @@ const CanvasView: React.FC = () => {
                   scaleY={(calibrationBottom.mmPerPixel && calibrationTop.mmPerPixel ? calibrationBottom.mmPerPixel / calibrationTop.mmPerPixel : 1) * (bottomImageMirrorY ? -1 : 1)}
                   offsetX={bottomImageMirrorX ? bgImageBottom.width : 0}
                   offsetY={bottomImageMirrorY ? bgImageBottom.height : 0}
-                  opacity={heatmapViewMode === 'align' ? 0.5 : 1}
-                  draggable={heatmapViewMode === 'align'}
+                  opacity={(heatmapViewMode as any) === 'align' ? 0.5 : 1}
+                  draggable={(heatmapViewMode as any) === 'align'}
                   onDragEnd={(e) => {
                       setBottomImageOffset({
                           x: pxToMm(e.target.x()),
@@ -455,29 +531,29 @@ const CanvasView: React.FC = () => {
                       });
                   }}
                   onMouseEnter={(e) => {
-                      if (heatmapViewMode === 'align') {
+                      if ((heatmapViewMode as any) === 'align') {
                           const stage = e.target.getStage();
                           if (stage) stage.container().style.cursor = 'move';
                       }
                   }}
                   onMouseLeave={(e) => {
-                      if (heatmapViewMode === 'align') {
+                      if ((heatmapViewMode as any) === 'align') {
                           const stage = e.target.getStage();
                           if (stage) stage.container().style.cursor = getCursor();
                       }
                   }}
-                  listening={heatmapViewMode === 'align'}
+                  listening={(heatmapViewMode as any) === 'align'}
                   name="PCB_IMAGE_BOTTOM"
               />
           )}
 
           {/* Overlays (Heatmap, Grid, Geometry) - Always in global MM space relative to Top Reference */}
           <Group name="OVERLAYS">
-            {baseCal.mmPerPixel && currentDimensions && (
+            {baseCal.mmPerPixel && currentDimensions && layers.heatmap.visible && (
                 <HeatmapOverlay width={mmToPx(currentDimensions.width * (calibrationTop.mmPerPixel || calibrationBottom.mmPerPixel || 1))} height={mmToPx(currentDimensions.height * (calibrationTop.mmPerPixel || calibrationBottom.mmPerPixel || 1))} />
             )}
 
-            <SolverGridOverlay />
+            {layers.grid.visible && <SolverGridOverlay />}
 
             {heatmapResult && baseCal.mmPerPixel && currentDimensions && (
                 <Group name="HOTSPOTS" listening={false}>
@@ -488,13 +564,13 @@ const CanvasView: React.FC = () => {
 
                     let hotspots: { idx: number, label: string, color: string }[] = [];
 
-                    if (heatmapViewMode === 'top') {
+                    if ((heatmapViewMode as any) === 'top') {
                         hotspots.push({ idx: heatmapResult.maxTempIdxTop, label: `MAX TOP: ${heatmapResult.TTop[heatmapResult.maxTempIdxTop].toFixed(1)}°C`, color: "#ef4444" });
-                    } else if (heatmapViewMode === 'bottom') {
+                    } else if ((heatmapViewMode as any) === 'bottom') {
                         hotspots.push({ idx: heatmapResult.maxTempIdxBottom, label: `MAX BOT: ${heatmapResult.TBottom[heatmapResult.maxTempIdxBottom].toFixed(1)}°C`, color: "#ef4444" });
-                    } else if (heatmapViewMode === 'max') {
+                    } else if ((heatmapViewMode as any) === 'max') {
                         hotspots.push({ idx: heatmapResult.maxTempIdx, label: `MAX BOARD: ${heatmapResult.maxTemp.toFixed(1)}°C`, color: "#ef4444" });
-                    } else if (heatmapViewMode === 'difference') {
+                    } else if ((heatmapViewMode as any) === 'difference') {
                         let minIdx = 0, maxIdx = 0, minVal = Infinity, maxVal = -Infinity;
                         for (let i = 0; i < heatmapResult.TTop.length; i++) {
                             const d = heatmapResult.TTop[i] - heatmapResult.TBottom[i];
@@ -575,10 +651,53 @@ const CanvasView: React.FC = () => {
                 </Group>
             )}
 
-            <Group name="GEOMETRY">
-                {pcbBoundary && <PolygonEditor shape={pcbBoundary} mmToPx={mmToPx} pxToMm={pxToMm} />}
+            <Group name="GEOMETRY" listening={!layers.components.locked || !layers.zones.locked || !layers.boundary.locked}>
+                {studyArea.enabled && (
+                    studyArea.shape === 'circle' ? (
+                        <Circle
+                            x={mmToPx(studyArea.rectMm.x + studyArea.rectMm.width/2)}
+                            y={mmToPx(studyArea.rectMm.y + studyArea.rectMm.height/2)}
+                            radius={mmToPx(Math.max(studyArea.rectMm.width, studyArea.rectMm.height) / 2)}
+                            stroke="#8b5cf6"
+                            strokeWidth={2 / stage.scale}
+                            dash={[5, 5]}
+                            draggable
+                            onDragEnd={(e) => {
+                                const r = Math.max(studyArea.rectMm.width, studyArea.rectMm.height) / 2;
+                                setStudyArea({
+                                    rectMm: {
+                                        ...studyArea.rectMm,
+                                        x: pxToMm(e.target.x()) - r,
+                                        y: pxToMm(e.target.y()) - r,
+                                    }
+                                });
+                            }}
+                        />
+                    ) : (
+                        <Rect
+                            x={mmToPx(studyArea.rectMm.x)}
+                            y={mmToPx(studyArea.rectMm.y)}
+                            width={mmToPx(studyArea.rectMm.width)}
+                            height={mmToPx(studyArea.rectMm.height)}
+                            stroke="#8b5cf6"
+                            strokeWidth={2 / stage.scale}
+                            dash={[5, 5]}
+                            draggable
+                            onDragEnd={(e) => {
+                                setStudyArea({
+                                    rectMm: {
+                                        ...studyArea.rectMm,
+                                        x: pxToMm(e.target.x()),
+                                        y: pxToMm(e.target.y()),
+                                    }
+                                });
+                            }}
+                        />
+                    )
+                )}
+                {pcbBoundary && layers.boundary.visible && <PolygonEditor shape={pcbBoundary} mmToPx={mmToPx} pxToMm={pxToMm} />}
                 {zones.filter(z => z.type !== 'pcbBoundary').map(zone => (
-                    <PolygonEditor key={zone.id} shape={zone} mmToPx={mmToPx} pxToMm={pxToMm} />
+                    layers.zones.visible && <PolygonEditor key={zone.id} shape={zone} mmToPx={mmToPx} pxToMm={pxToMm} />
                 ))}
 
                 {(mode === 'drawZone' || mode === 'drawBoundary') && drawingPoints.length > 0 && (
@@ -596,7 +715,7 @@ const CanvasView: React.FC = () => {
                     </Group>
                 )}
 
-                {components.map((comp) => {
+                {layers.components.visible && components.map((comp) => {
                     const pxX = mmToPx(comp.x);
                     const pxY = mmToPx(comp.y);
                     const pxW = mmToPx(comp.width);
@@ -619,9 +738,9 @@ const CanvasView: React.FC = () => {
                         key={comp.id}
                         x={pxX}
                         y={pxY}
-                        draggable={mode === 'select'}
+                        draggable={mode === 'select' && !layers.components.locked}
                         name={`COMPONENT_${comp.id}`}
-                        listening={mode === 'select'}
+                        listening={mode === 'select' && !layers.components.locked}
                         onDragStart={(e) => {
                             logPointer("CompDragStart", e);
                             e.cancelBubble = true;
@@ -640,9 +759,47 @@ const CanvasView: React.FC = () => {
                             setSelection({ type: 'component', id: comp.id });
                         }}
                     >
-                        <Rect x={-pxW/2} y={-pxH/2} width={pxW} height={pxH} fill="transparent"
-                            stroke={isSelected ? "#3b82f6" : statusColor} strokeWidth={isSelected ? 4 / stage.scale : 2 / stage.scale} opacity={0.8}
-                            dash={comp.side === 'bottom' ? [4, 2] : undefined} />
+                        {comp.shape === 'circle' ? (
+                            <Circle
+                                radius={pxW / 2}
+                                fill="transparent"
+                                stroke={isSelected ? "#3b82f6" : statusColor}
+                                strokeWidth={isSelected ? 4 / stage.scale : 2 / stage.scale}
+                                opacity={0.8}
+                                dash={comp.side === 'bottom' ? [4, 2] : undefined}
+                                hitStrokeWidth={Math.max(10, 20 / stage.scale)}
+                                onMouseEnter={(e) => {
+                                    if (mode === 'select' && !layers.components.locked) {
+                                        const s = e.target.getStage();
+                                        if (s) s.container().style.cursor = 'move';
+                                    }
+                                }}
+                                onMouseLeave={(e) => {
+                                    if (mode === 'select') {
+                                        const s = e.target.getStage();
+                                        if (s) s.container().style.cursor = getCursor();
+                                    }
+                                }}
+                            />
+                        ) : (
+                            <Rect x={-pxW/2} y={-pxH/2} width={pxW} height={pxH} fill="transparent"
+                                stroke={isSelected ? "#3b82f6" : statusColor} strokeWidth={isSelected ? 4 / stage.scale : 2 / stage.scale} opacity={0.8}
+                                dash={comp.side === 'bottom' ? [4, 2] : undefined}
+                                hitStrokeWidth={Math.max(10, 20 / stage.scale)}
+                                onMouseEnter={(e) => {
+                                    if (mode === 'select' && !layers.components.locked) {
+                                        const s = e.target.getStage();
+                                        if (s) s.container().style.cursor = 'move';
+                                    }
+                                }}
+                                onMouseLeave={(e) => {
+                                    if (mode === 'select') {
+                                        const s = e.target.getStage();
+                                        if (s) s.container().style.cursor = getCursor();
+                                    }
+                                }}
+                            />
+                        )}
                         <Circle radius={8 / stage.scale} fill={statusColor} opacity={(junction?.isOverLimit || (junction?.ratingPercent && junction.ratingPercent > 90)) ? opacity : 1}
                         stroke="white" strokeWidth={2 / stage.scale} shadowBlur={junction?.isOverLimit ? 10 : 0} shadowColor="red" />
                         <Text text={label} fontSize={9 / stage.scale} fill="white" fontStyle="bold" y={pxH/2 + 5 / stage.scale} align="center" width={120 / stage.scale} x={-60 / stage.scale} shadowColor="black" shadowBlur={2} shadowOffset={{x:1, y:1}} shadowOpacity={1} listening={false} />
@@ -659,6 +816,51 @@ const CanvasView: React.FC = () => {
         </Layer>
       </Stage>
 
+      <NavigationControls
+        zoom={stage.scale}
+        onZoomIn={() => {
+            const stageObj = stageRef.current;
+            if (!stageObj) return;
+            const oldScale = stage.scale;
+            const newScale = oldScale * 1.2;
+            const center = { x: stageObj.width() / 2, y: stageObj.height() / 2 };
+            const mousePointTo = {
+                x: (center.x - stage.x) / oldScale,
+                y: (center.y - stage.y) / oldScale,
+            };
+            setStage({
+                ...stage,
+                scale: newScale,
+                x: center.x - mousePointTo.x * newScale,
+                y: center.y - mousePointTo.y * newScale,
+            });
+            setNavigation({ zoom: newScale });
+        }}
+        onZoomOut={() => {
+            const stageObj = stageRef.current;
+            if (!stageObj) return;
+            const oldScale = stage.scale;
+            const newScale = oldScale / 1.2;
+            const center = { x: stageObj.width() / 2, y: stageObj.height() / 2 };
+            const mousePointTo = {
+                x: (center.x - stage.x) / oldScale,
+                y: (center.y - stage.y) / oldScale,
+            };
+            setStage({
+                ...stage,
+                scale: newScale,
+                x: center.x - mousePointTo.x * newScale,
+                y: center.y - mousePointTo.y * newScale,
+            });
+            setNavigation({ zoom: newScale });
+        }}
+        onFit={handleFitToScreen}
+        onReset={() => {
+            setStage({ scale: 1, x: 0, y: 0 });
+            setNavigation({ zoom: 1 });
+        }}
+      />
+
       {baseCal.mmPerPixel && (
         <div className="absolute bottom-4 right-4 bg-black/80 text-white p-3 rounded text-[10px] font-mono pointer-events-none border border-white/20 backdrop-blur-sm shadow-xl min-w-[150px]">
             <div className="text-blue-400 font-bold mb-1 border-b border-white/10 pb-1">CURSOR INFO</div>
@@ -667,8 +869,17 @@ const CanvasView: React.FC = () => {
                 <span className="text-gray-400">POS Y:</span> <span>{mousePos.mmY.toFixed(1)} mm</span>
                 <span className="text-gray-400">TOP:</span> <span className="text-orange-300">{mousePos.tTop.toFixed(1)} °C</span>
                 <span className="text-gray-400">BOT:</span> <span className="text-blue-300">{mousePos.tBottom.toFixed(1)} °C</span>
-                <span className="text-gray-400">VIEW:</span> <span className={Math.abs(mousePos.temp) > 80 ? "text-red-400" : "text-green-400"}>{mousePos.temp.toFixed(1)} {heatmapViewMode === 'difference' ? 'Δ°C' : '°C'}</span>
+                <span className="text-gray-400">VIEW:</span> <span className={Math.abs(mousePos.temp) > 80 ? "text-red-400" : "text-green-400"}>{mousePos.temp.toFixed(1)} {(heatmapViewMode as any) === 'difference' ? 'Δ°C' : '°C'}</span>
                 <span className="text-gray-400">k:</span> <span className="text-blue-300">{mousePos.k.toFixed(1)} W/mK</span>
+
+                {debugCoords && (
+                    <>
+                        <div className="col-span-2 border-t border-white/10 mt-1 pt-1 text-gray-500 font-bold uppercase text-[8px]">Debug Coords</div>
+                        <span className="text-gray-400">STAGE X:</span> <span>{mousePos.x.toFixed(1)}</span>
+                        <span className="text-gray-400">STAGE Y:</span> <span>{mousePos.y.toFixed(1)}</span>
+                        <span className="text-gray-400">SCALE:</span> <span>{stage.scale.toFixed(2)}</span>
+                    </>
+                )}
             </div>
         </div>
       )}
@@ -690,6 +901,22 @@ const CanvasView: React.FC = () => {
               <span className="text-gray-400">Delete:</span> <span>Remove</span>
           </div>
       </div>
+
+      {mode === 'calibrate' && calibration.point1 && calibration.point2 && (
+        <CalibrationInput
+          p1={calibration.point1}
+          p2={calibration.point2}
+          stageScale={stage.scale}
+          stageOffset={{ x: stage.x, y: stage.y }}
+        />
+      )}
+
+      {mode === 'select' && selection && (
+        <SelectionPopover
+          stageScale={stage.scale}
+          stageOffset={{ x: stage.x, y: stage.y }}
+        />
+      )}
     </div>
   );
 };

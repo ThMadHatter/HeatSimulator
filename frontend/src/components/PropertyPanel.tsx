@@ -2,6 +2,9 @@ import React, { useMemo, useState } from 'react';
 import { useStore } from '../store/useStore';
 import { Trash2, Settings, Info, Layers, Zap, ChevronDown, ChevronRight, Thermometer, Palette, Bug, Download } from 'lucide-react';
 import { estimateBaseConductivity, calculateStackupKXY, calculateStackupKZ, STACKUP_PRESETS } from '../thermal/utils';
+import { GettingStarted } from './GettingStarted';
+import { InfoIcon } from './InfoIcon';
+import { LayerManager } from './LayerManager';
 
 const Accordion: React.FC<{ title: string, icon: React.ReactNode, children: React.ReactNode, defaultOpen?: boolean }> = ({ title, icon, children, defaultOpen = false }) => {
     const [isOpen, setIsOpen] = useState(defaultOpen);
@@ -61,6 +64,8 @@ const PropertyPanel: React.FC = () => {
   const setShowConductivityMap = useStore(state => state.setShowConductivityMap);
   const debugPointerEvents = useStore(state => state.debugPointerEvents);
   const setDebugPointerEvents = useStore(state => state.setDebugPointerEvents);
+  const debugCoords = useStore(state => state.debugCoords);
+  const setDebugCoords = useStore(state => state.setDebugCoords);
   const stageRef = useStore(state => state.stageRef);
 
   const selectedComp = useMemo(() => {
@@ -100,8 +105,8 @@ const PropertyPanel: React.FC = () => {
   const estimatedK = useMemo(() => estimateBaseConductivity(stackup, detailedStackup), [stackup, detailedStackup]);
 
   return (
-    <div className="flex-none w-72 bg-gray-100 border-l border-gray-300 h-full overflow-y-auto flex flex-col">
-      <div className="p-4 flex-1">
+    <div className="w-80 bg-white h-full overflow-y-auto flex flex-col border-l border-gray-200">
+      <div className="p-2 flex-1">
         <Accordion title="Selected Object" icon={<Info size={16} />} defaultOpen={true}>
             {!selectedComp && !selectedZone ? (
                 <p className="text-gray-500 italic text-xs p-2">No object selected. Click a component or zone to edit.</p>
@@ -128,7 +133,10 @@ const PropertyPanel: React.FC = () => {
 
             <div className="grid grid-cols-2 gap-2">
                 <div>
-                    <label className="block text-xs font-medium text-gray-700">Width (mm)</label>
+                    <label className="block text-xs font-medium text-gray-700 flex items-center">
+                        Width (mm)
+                        <InfoIcon title="Width" text="Physical width of the component package in millimeters." />
+                    </label>
                     <input
                     type="number"
                     value={selectedComp.width || 0}
@@ -137,7 +145,10 @@ const PropertyPanel: React.FC = () => {
                     />
                 </div>
                 <div>
-                    <label className="block text-xs font-medium text-gray-700">Height (mm)</label>
+                    <label className="block text-xs font-medium text-gray-700 flex items-center">
+                        Height (mm)
+                        <InfoIcon title="Height" text="Physical height of the component package in millimeters." />
+                    </label>
                     <input
                     type="number"
                     value={selectedComp.height || 0}
@@ -148,7 +159,10 @@ const PropertyPanel: React.FC = () => {
             </div>
 
             <div>
-                <label className="block text-xs font-medium text-gray-700">Power (W)</label>
+                <label className="block text-xs font-medium text-gray-700 flex items-center">
+                    Power (W)
+                    <InfoIcon title="Power" text="Average electrical power dissipated by the component as heat. [W]" />
+                </label>
                 <input
                 type="number"
                 value={selectedComp.power}
@@ -159,7 +173,10 @@ const PropertyPanel: React.FC = () => {
             </div>
 
             <div>
-                <label className="block text-xs font-medium text-gray-700">thetaJC (°C/W)</label>
+                <label className="block text-xs font-medium text-gray-700 flex items-center">
+                    thetaJC (°C/W)
+                    <InfoIcon title="Theta-JC" text="Thermal resistance from junction to case. Used to estimate junction temperature." />
+                </label>
                 <input
                 type="number"
                 value={selectedComp.thetaJC || ''}
@@ -170,7 +187,10 @@ const PropertyPanel: React.FC = () => {
             </div>
 
             <div>
-                <label className="block text-xs font-medium text-gray-700">thetaJA (°C/W)</label>
+                <label className="block text-xs font-medium text-gray-700 flex items-center">
+                    thetaJA (°C/W)
+                    <InfoIcon title="Theta-JA" text="Junction-to-ambient thermal resistance. Optional, used for validation." />
+                </label>
                 <input
                 type="number"
                 value={selectedComp.thetaJA || ''}
@@ -182,7 +202,10 @@ const PropertyPanel: React.FC = () => {
 
             <div className="grid grid-cols-2 gap-2">
                 <div>
-                    <label className="block text-xs font-medium text-gray-700">Max Temp (°C)</label>
+                    <label className="block text-xs font-medium text-gray-700 flex items-center">
+                        Max Temp (°C)
+                        <InfoIcon title="Max Temp" text="Maximum rated operating temperature (Tj) for this component." />
+                    </label>
                     <input
                     type="number"
                     value={selectedComp.maxTemperature || 125}
@@ -255,11 +278,15 @@ const PropertyPanel: React.FC = () => {
             ) : null}
         </Accordion>
 
-        <Accordion title="Simulation Results" icon={<Thermometer size={16} />} defaultOpen={!!junctionData}>
+        <Accordion title="Simulation Results" icon={<Thermometer size={16} />} defaultOpen={true}>
             {!heatmapResult ? (
-                <p className="text-gray-500 italic text-xs p-2">Run simulation to see results.</p>
+                <p className="text-gray-500 italic text-xs p-2 text-center">Place components to run simulation.</p>
             ) : (
                 <div className="space-y-4">
+                    <div className="flex items-center justify-between px-2 py-1 bg-green-50 rounded border border-green-100 mb-2">
+                        <span className="text-[9px] font-bold text-green-700 uppercase">Status: Converged</span>
+                        <span className="text-[9px] font-mono text-green-600">{heatmapResult.iterations} iters</span>
+                    </div>
                     {junctionData && (
                         <div className="p-2 bg-blue-50 rounded border border-blue-100 space-y-2">
                             <div className="flex justify-between items-center">
@@ -292,7 +319,10 @@ const PropertyPanel: React.FC = () => {
                         </div>
                     )}
                     <div className="p-2 bg-white rounded border border-gray-200 space-y-1">
-                         <h4 className="text-[10px] font-bold text-gray-500 uppercase">Global</h4>
+                         <div className="flex justify-between items-center mb-1">
+                            <h4 className="text-[10px] font-bold text-gray-500 uppercase">Global Limits</h4>
+                            <InfoIcon title="Accuracy" text="Approximate steady-state model. Not a substitute for full 3D FEA/CFD." />
+                         </div>
                          <div className="grid grid-cols-2 gap-x-2 text-xs">
                             <span className="text-gray-500">Max Temp:</span>
                             <span className="text-right font-mono font-bold text-red-600">{heatmapResult.maxTemp.toFixed(1)}°C</span>
@@ -310,102 +340,14 @@ const PropertyPanel: React.FC = () => {
             )}
         </Accordion>
 
-        <Accordion title="Heatmap View" icon={<Palette size={16} />} defaultOpen={true}>
-            <div className="space-y-3">
-                <div>
-                    <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1">View Mode</label>
-                    <div className="grid grid-cols-2 gap-1">
-                        {[
-                            { id: 'top', label: 'Top' },
-                            { id: 'bottom', label: 'Bottom' },
-                            { id: 'max', label: 'Max T/B' },
-                            { id: 'difference', label: 'Delta T' },
-                            { id: 'align', label: 'Alignment' }
-                        ].map(mode => (
-                            <button
-                                key={mode.id}
-                                onClick={() => setHeatmapViewMode(mode.id as any)}
-                                className={`px-2 py-1 text-[10px] font-bold rounded border transition-colors ${
-                                    heatmapViewMode === mode.id
-                                        ? 'bg-blue-600 text-white border-blue-600'
-                                        : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'
-                                }`}
-                            >
-                                {mode.label}
-                            </button>
-                        ))}
-                    </div>
-                </div>
-
-                {heatmapViewMode === 'align' && (
-                    <div className="p-2 bg-orange-50 rounded border border-orange-200">
-                        <div className="text-[10px] font-bold text-orange-700 mb-2 uppercase">Image Alignment (Bottom)</div>
-                        <div className="grid grid-cols-2 gap-2">
-                            <div>
-                                <label className="text-[9px] text-gray-500 block">Offset X (mm)</label>
-                                <input type="number" step="0.1" value={bottomImageOffset.x} onChange={(e) => setBottomImageOffset({...bottomImageOffset, x: parseFloat(e.target.value) || 0})} className="w-full bg-white text-gray-800 text-[10px] px-2 py-1 rounded border border-gray-300" />
-                            </div>
-                            <div>
-                                <label className="text-[9px] text-gray-500 block">Offset Y (mm)</label>
-                                <input type="number" step="0.1" value={bottomImageOffset.y} onChange={(e) => setBottomImageOffset({...bottomImageOffset, y: parseFloat(e.target.value) || 0})} className="w-full bg-white text-gray-800 text-[10px] px-2 py-1 rounded border border-gray-300" />
-                            </div>
-                            <div className="col-span-2">
-                                <label className="text-[9px] text-gray-500 block">Rotation (deg)</label>
-                                <input type="number" step="0.5" value={bottomImageRotation} onChange={(e) => setBottomImageRotation(parseFloat(e.target.value) || 0)} className="w-full bg-white text-gray-800 text-[10px] px-2 py-1 rounded border border-gray-300" />
-                            </div>
-                            <div className="flex items-center gap-4 col-span-2 mt-1">
-                                <label className="flex items-center gap-1 cursor-pointer">
-                                    <input type="checkbox" checked={bottomImageMirrorX} onChange={(e) => setBottomImageMirrorX(e.target.checked)} className="rounded text-blue-600" />
-                                    <span className="text-[9px] text-gray-600 font-bold uppercase">Mirror X</span>
-                                </label>
-                                <label className="flex items-center gap-1 cursor-pointer">
-                                    <input type="checkbox" checked={bottomImageMirrorY} onChange={(e) => setBottomImageMirrorY(e.target.checked)} className="rounded text-blue-600" />
-                                    <span className="text-[9px] text-gray-600 font-bold uppercase">Mirror Y</span>
-                                </label>
-                            </div>
-                        </div>
-                        <div className="text-[8px] text-gray-500 mt-2 italic text-center">Hint: Drag bottom image in canvas to align</div>
-                    </div>
-                )}
-
-                <div className="flex items-center justify-between pt-2 border-t border-gray-100">
-                    <label className="text-xs font-medium text-gray-700">Auto Scale</label>
-                    <input
-                        type="checkbox"
-                        checked={manualHeatmapMaxTemperatureC === null}
-                        onChange={(e) => setManualHeatmapMaxTemperatureC(e.target.checked ? null : (heatmapResult?.maxTemp || 100))}
-                    />
-                </div>
-                {manualHeatmapMaxTemperatureC !== null && (
-                    <div>
-                        <label className="block text-[10px] font-bold text-gray-500 uppercase">Manual Max (°C)</label>
-                        <input
-                            type="number"
-                            value={manualHeatmapMaxTemperatureC}
-                            onChange={(e) => setManualHeatmapMaxTemperatureC(parseFloat(e.target.value) || 0)}
-                            className="mt-1 block w-full rounded border-gray-300 shadow-sm sm:text-xs p-1 border"
-                        />
-                    </div>
-                )}
-                <div className="pt-2 border-t border-gray-200">
-                    <label className="block text-[10px] font-bold text-gray-500 uppercase">Opacity</label>
-                    <input
-                        type="range"
-                        min="0"
-                        max="1"
-                        step="0.1"
-                        value={heatmapOpacity}
-                        onChange={(e) => setHeatmapOpacity(parseFloat(e.target.value))}
-                        className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer mt-2"
-                    />
-                </div>
-            </div>
-        </Accordion>
 
         <Accordion title="Thermal Engine" icon={<Settings size={16} />}>
             <div className="space-y-4">
                 <div>
-                    <label className="block text-[10px] font-bold text-gray-500 uppercase">Ambient Temp (°C)</label>
+                    <label className="block text-[10px] font-bold text-gray-500 uppercase flex items-center">
+                        Ambient Temp (°C)
+                        <InfoIcon title="Ambient Temp" text="The temperature of the surrounding air and enclosure walls. [°C]" />
+                    </label>
                     <input
                         type="number"
                         value={ambientTemperature}
@@ -414,7 +356,10 @@ const PropertyPanel: React.FC = () => {
                     />
                 </div>
                 <div>
-                    <label className="block text-[10px] font-bold text-gray-500 uppercase">Base Conductivity</label>
+                    <label className="block text-[10px] font-bold text-gray-500 uppercase flex items-center">
+                        Base Conductivity
+                        <InfoIcon title="Conductivity Mode" text="Manual: Use legacy parameters. Stackup: Calculate from layer properties." />
+                    </label>
                     <select
                         value={stackup.baseConductivityMode}
                         onChange={(e) => setStackup({ baseConductivityMode: e.target.value as any })}
@@ -528,12 +473,19 @@ const PropertyPanel: React.FC = () => {
                 </div>
 
                 <div className="bg-blue-50 p-2 rounded border border-blue-100 space-y-1">
+                    <div className="text-[9px] font-bold text-blue-400 uppercase mb-1">Estimated Values</div>
                     <div className="flex justify-between items-center text-[10px]">
-                        <span className="text-blue-600 font-bold uppercase">kXY (In-plane)</span>
+                        <span className="text-blue-600 font-bold uppercase flex items-center">
+                            kXY (In-plane)
+                            <InfoIcon title="kXY" text="Effective horizontal conductivity. Influenced heavily by copper coverage and thickness." />
+                        </span>
                         <span className="font-mono font-bold text-blue-800">{kXY.toFixed(2)} W/mK</span>
                     </div>
                     <div className="flex justify-between items-center text-[10px]">
-                        <span className="text-blue-600 font-bold uppercase">kZ (Through)</span>
+                        <span className="text-blue-600 font-bold uppercase flex items-center">
+                            kZ (Through)
+                            <InfoIcon title="kZ" text="Effective vertical conductivity. Influenced heavily by dielectric thickness and core material." />
+                        </span>
                         <span className="font-mono font-bold text-blue-800">{kZ.toFixed(2)} W/mK</span>
                     </div>
                     <div className="flex justify-between items-center text-[10px]">
@@ -571,6 +523,14 @@ const PropertyPanel: React.FC = () => {
                         onChange={(e) => setDebugPointerEvents(e.target.checked)}
                     />
                 </div>
+                <div className="flex items-center justify-between">
+                    <label className="text-xs font-medium text-gray-700">Debug Coords</label>
+                    <input
+                        type="checkbox"
+                        checked={debugCoords}
+                        onChange={(e) => setDebugCoords(e.target.checked)}
+                    />
+                </div>
                 {heatmapResult && (
                     <div className="pt-2 border-t border-gray-200 text-[10px] font-mono text-gray-500">
                         <div>Grid: {heatmapResult.width}x{heatmapResult.height}</div>
@@ -581,7 +541,7 @@ const PropertyPanel: React.FC = () => {
         </Accordion>
       </div>
 
-      <div className="p-4 border-t border-gray-300 bg-white">
+      <div className="p-2 border-t border-gray-300 bg-white">
           <button
             className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded flex items-center justify-center gap-2 transition-colors text-sm shadow-md"
             onClick={() => {

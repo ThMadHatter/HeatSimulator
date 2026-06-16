@@ -26,7 +26,7 @@ describe('solveSteadyState', () => {
 
     it('produces symmetric heat spread for a centered component', () => {
         const components: Component[] = [{
-            id: 'c1', name: 'U1', x: 50, y: 50, width: 10, height: 10, power: 1.0
+            id: 'c1', name: 'U1', x: 50.5, y: 50.5, width: 10, height: 10, power: 1.0
         }];
         const result = solveSteadyState(components, [], 100, 100, boundary, ambientTemp, 100);
 
@@ -35,6 +35,7 @@ describe('solveSteadyState', () => {
         const centerX = Math.floor(nx / 2);
         const centerY = Math.floor(ny / 2);
 
+        // Indices 40 and 60 (centers 40.5 and 60.5) are symmetric around 50.5
         const t_left = result.data[centerY * nx + (centerX - 10)];
         const t_right = result.data[centerY * nx + (centerX + 10)];
         const t_up = result.data[(centerY - 10) * nx + centerX];
@@ -182,6 +183,26 @@ describe('solveSteadyState', () => {
         // Ensure it's definitely NOT using the wrong side
         expect(Math.abs(jTop.tPcb - result.TBottom[idxTop])).toBeGreaterThan(0.1);
         expect(Math.abs(jBot.tPcb - result.TTop[idxBot])).toBeGreaterThan(0.1);
+    });
+
+    it('circular component produces symmetric heat spread', () => {
+        const components: Component[] = [{
+            id: 'c1', name: 'U1', x: 50.5, y: 50.5, width: 10, height: 10, power: 1.0, shape: 'circle'
+        }];
+        const result = solveSteadyState(components, [], 100, 100, boundary, ambientTemp, 100);
+
+        const nx = result.width;
+        const ny = result.height;
+        const centerX = Math.floor(nx / 2);
+        const centerY = Math.floor(ny / 2);
+
+        const t_left = result.data[centerY * nx + (centerX - 10)];
+        const t_right = result.data[centerY * nx + (centerX + 10)];
+        const t_up = result.data[(centerY - 10) * nx + centerX];
+        const t_down = result.data[(centerY + 10) * nx + centerX];
+
+        expect(Math.abs(t_left - t_right)).toBeLessThan(0.1);
+        expect(Math.abs(t_up - t_down)).toBeLessThan(0.1);
     });
 });
 
