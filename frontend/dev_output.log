@@ -7,3 +7,21 @@
 
   ➜  Local:   http://localhost:5173/
   ➜  Network: use --host to expose
+12:00:35 PM [vite] page reload dist/index.html
+12:03:30 PM [vite] hmr update /src/components/CanvasView.tsx
+hmr update /src/style.css
+12:06:46 PM [vite] page reload src/components/Controls.tsx
+12:12:50 PM [vite] page reload dist/index.html
+12:18:10 PM [vite] page reload dist/index.html
+12:39:29 PM [vite] hmr update /src/components/CanvasView.tsx
+hmr update /src/style.css
+12:43:51 PM [vite] hmr update /src/components/CanvasView.tsx
+hmr update /src/style.css
+12:44:23 PM [vite] hmr update /src/components/CanvasView.tsx
+hmr update /src/style.css
+12:47:55 PM [vite] hmr update /src/components/CanvasView.tsx
+hmr update /src/style.css
+12:49:40 PM [vite] hmr update /src/components/CanvasView.tsx
+hmr update /src/style.css
+12:51:41 PM [vite] page reload dist/index.html
+12:59:53 PM [vite] page reload dist/index.html

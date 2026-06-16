@@ -33,7 +33,7 @@ const Controls: React.FC = () => {
             className="w-20 bg-gray-800 border border-gray-600 rounded px-2 py-1 text-sm"
           />
           <button
-            onClick={() => resetCalibration()}
+            onClick={() => (resetCalibration as any)()}
             className="text-xs text-red-400 hover:text-red-300 underline"
           >
             Reset

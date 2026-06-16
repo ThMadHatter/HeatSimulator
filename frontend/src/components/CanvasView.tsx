@@ -72,7 +72,7 @@ const CanvasView: React.FC = () => {
     const height = stageObj.height();
     const padding = 50;
 
-    const currentDimensions = heatmapViewMode === 'bottom' ? (imageDimensionsBottom || imageDimensionsTop) : (imageDimensionsTop || imageDimensionsBottom);
+    const currentDimensions = (heatmapViewMode as any) === "bottom" ? (imageDimensionsBottom || imageDimensionsTop) : (imageDimensionsTop || imageDimensionsBottom);
     if (!currentDimensions) return;
 
     const scale = Math.min(
@@ -277,9 +277,9 @@ const CanvasView: React.FC = () => {
                 tBottom = heatmapResult.TBottom[idx];
                 k = heatmapResult.kGrid[idx];
 
-                if (heatmapViewMode === 'top') temp = tTop;
-                else if (heatmapViewMode === 'bottom') temp = tBottom;
-                else if (heatmapViewMode === 'difference') temp = tTop - tBottom;
+                if ((heatmapViewMode as any) === "top") temp = tTop;
+                else if ((heatmapViewMode as any) === "bottom") temp = tBottom;
+                else if ((heatmapViewMode as any) === "difference") temp = tTop - tBottom;
                 else temp = Math.max(tTop, tBottom);
             }
         }
@@ -414,7 +414,7 @@ const CanvasView: React.FC = () => {
 
   const getCursor = () => {
     if (isSpacePressed) return 'grabbing';
-    if (mode === 'pan' || (heatmapViewMode as string) === 'align') return 'grab';
+    if (mode === 'pan' || (heatmapViewMode as any) === 'align') return 'grab';
     if (['drawZone', 'drawBoundary', 'addComponent', 'calibrate'].includes(mode)) return 'crosshair';
     return 'default';
   };
@@ -422,7 +422,7 @@ const CanvasView: React.FC = () => {
   const stageWidth = window.innerWidth - 64 - 256;
   const stageHeight = window.innerHeight - 64;
 
-  const currentDimensions = (heatmapViewMode as string) === 'bottom' ? (imageDimensionsBottom || imageDimensionsTop) : (imageDimensionsTop || imageDimensionsBottom);
+  const currentDimensions = (heatmapViewMode as any) === 'bottom' ? (imageDimensionsBottom || imageDimensionsTop) : (imageDimensionsTop || imageDimensionsBottom);
 
   return (
     <div className="flex-1 bg-gray-300 relative overflow-hidden" style={{ cursor: getCursor() }}>
@@ -491,17 +491,17 @@ const CanvasView: React.FC = () => {
           )}
 
           {/* Top Image (Reference) */}
-          {bgImageTop && ((heatmapViewMode as string) !== 'bottom' || (heatmapViewMode as string) === 'align') && (
+          {bgImageTop && ((heatmapViewMode as any) !== 'bottom' || (heatmapViewMode as any) === 'align') && (
               <KonvaImage
                 image={bgImageTop}
-                opacity={(heatmapViewMode as string) === 'align' ? 0.5 : 1}
+                opacity={(heatmapViewMode as any) === 'align' ? 0.5 : 1}
                 listening={false}
                 name="PCB_IMAGE_TOP"
               />
           )}
 
           {/* Bottom Image (Transformed) */}
-          {bgImageBottom && ((heatmapViewMode as string) === 'bottom' || (heatmapViewMode as string) === 'align') && (
+          {bgImageBottom && ((heatmapViewMode as any) === 'bottom' || (heatmapViewMode as any) === 'align') && (
               <KonvaImage
                   image={bgImageBottom}
                   x={mmToPx(bottomImageOffset.x)}
@@ -511,8 +511,8 @@ const CanvasView: React.FC = () => {
                   scaleY={(calibrationBottom.mmPerPixel && calibrationTop.mmPerPixel ? calibrationBottom.mmPerPixel / calibrationTop.mmPerPixel : 1) * (bottomImageMirrorY ? -1 : 1)}
                   offsetX={bottomImageMirrorX ? bgImageBottom.width : 0}
                   offsetY={bottomImageMirrorY ? bgImageBottom.height : 0}
-                  opacity={(heatmapViewMode as string) === 'align' ? 0.5 : 1}
-                  draggable={(heatmapViewMode as string) === 'align'}
+                  opacity={(heatmapViewMode as any) === 'align' ? 0.5 : 1}
+                  draggable={(heatmapViewMode as any) === 'align'}
                   onDragEnd={(e) => {
                       setBottomImageOffset({
                           x: pxToMm(e.target.x()),
@@ -520,18 +520,18 @@ const CanvasView: React.FC = () => {
                       });
                   }}
                   onMouseEnter={(e) => {
-                      if ((heatmapViewMode as string) === 'align') {
+                      if ((heatmapViewMode as any) === 'align') {
                           const stage = e.target.getStage();
                           if (stage) stage.container().style.cursor = 'move';
                       }
                   }}
                   onMouseLeave={(e) => {
-                      if ((heatmapViewMode as string) === 'align') {
+                      if ((heatmapViewMode as any) === 'align') {
                           const stage = e.target.getStage();
                           if (stage) stage.container().style.cursor = getCursor();
                       }
                   }}
-                  listening={(heatmapViewMode as string) === 'align'}
+                  listening={(heatmapViewMode as any) === 'align'}
                   name="PCB_IMAGE_BOTTOM"
               />
           )}
@@ -553,13 +553,13 @@ const CanvasView: React.FC = () => {
 
                     let hotspots: { idx: number, label: string, color: string }[] = [];
 
-                    if ((heatmapViewMode as string) === 'top') {
+                    if ((heatmapViewMode as any) === 'top') {
                         hotspots.push({ idx: heatmapResult.maxTempIdxTop, label: `MAX TOP: ${heatmapResult.TTop[heatmapResult.maxTempIdxTop].toFixed(1)}°C`, color: "#ef4444" });
-                    } else if ((heatmapViewMode as string) === 'bottom') {
+                    } else if ((heatmapViewMode as any) === 'bottom') {
                         hotspots.push({ idx: heatmapResult.maxTempIdxBottom, label: `MAX BOT: ${heatmapResult.TBottom[heatmapResult.maxTempIdxBottom].toFixed(1)}°C`, color: "#ef4444" });
-                    } else if ((heatmapViewMode as string) === 'max') {
+                    } else if ((heatmapViewMode as any) === 'max') {
                         hotspots.push({ idx: heatmapResult.maxTempIdx, label: `MAX BOARD: ${heatmapResult.maxTemp.toFixed(1)}°C`, color: "#ef4444" });
-                    } else if ((heatmapViewMode as string) === 'difference') {
+                    } else if ((heatmapViewMode as any) === 'difference') {
                         let minIdx = 0, maxIdx = 0, minVal = Infinity, maxVal = -Infinity;
                         for (let i = 0; i < heatmapResult.TTop.length; i++) {
                             const d = heatmapResult.TTop[i] - heatmapResult.TBottom[i];
@@ -812,7 +812,7 @@ const CanvasView: React.FC = () => {
                 <span className="text-gray-400">POS Y:</span> <span>{mousePos.mmY.toFixed(1)} mm</span>
                 <span className="text-gray-400">TOP:</span> <span className="text-orange-300">{mousePos.tTop.toFixed(1)} °C</span>
                 <span className="text-gray-400">BOT:</span> <span className="text-blue-300">{mousePos.tBottom.toFixed(1)} °C</span>
-                <span className="text-gray-400">VIEW:</span> <span className={Math.abs(mousePos.temp) > 80 ? "text-red-400" : "text-green-400"}>{mousePos.temp.toFixed(1)} {(heatmapViewMode as string) === 'difference' ? 'Δ°C' : '°C'}</span>
+                <span className="text-gray-400">VIEW:</span> <span className={Math.abs(mousePos.temp) > 80 ? "text-red-400" : "text-green-400"}>{mousePos.temp.toFixed(1)} {(heatmapViewMode as any) === 'difference' ? 'Δ°C' : '°C'}</span>
                 <span className="text-gray-400">k:</span> <span className="text-blue-300">{mousePos.k.toFixed(1)} W/mK</span>
 
                 {debugCoords && (
