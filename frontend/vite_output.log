@@ -1,0 +1,184 @@
+
+> frontend@0.0.0 dev
+> vite
+
+
+  VITE v3.2.11  ready in 529 ms
+
+  ➜  Local:   http://localhost:5173/
+  ➜  Network: use --host to expose
+1:59:52 PM [vite] hmr update /src/components/Toolbar.tsx
+hmr update /src/style.css
+hmr update /src/components/CanvasView.tsx
+hmr update /src/style.css
+hmr update /src/components/Controls.tsx
+hmr update /src/style.css
+hmr update /src/components/PropertyPanel.tsx
+hmr update /src/style.css
+hmr update /src/components/SolverGridOverlay.tsx
+hmr update /src/style.css
+hmr update /src/components/HeatmapOverlay.tsx
+hmr update /src/style.css
+hmr update /src/components/PolygonEditor.tsx
+hmr update /src/style.css
+hmr update /src/components/ExportLegend.tsx
+hmr update /src/style.css
+hmr update /src/style.css
+2:00:16 PM [vite] hmr update /src/components/Toolbar.tsx
+hmr update /src/style.css
+2:00:41 PM [vite] hmr update /src/components/CanvasView.tsx
+hmr update /src/style.css
+2:00:47 PM [vite] hmr update /src/components/CanvasView.tsx
+hmr update /src/style.css
+2:00:58 PM [vite] hmr update /src/components/CanvasView.tsx
+hmr update /src/style.css
+2:01:15 PM [vite] hmr update /src/components/ExportLegend.tsx
+hmr update /src/style.css
+2:02:23 PM [vite] hmr update /src/components/CanvasView.tsx
+hmr update /src/style.css
+2:02:56 PM [vite] hmr update /src/components/CanvasView.tsx
+hmr update /src/style.css
+2:04:27 PM [vite] hmr update /src/components/CanvasView.tsx
+hmr update /src/style.css
+2:13:16 PM [vite] hmr update /src/components/SolverGridOverlay.tsx
+hmr update /src/style.css
+2:19:23 PM [vite] hmr update /src/components/CanvasView.tsx
+hmr update /src/style.css
+2:19:56 PM [vite] hmr update /src/components/CanvasView.tsx
+hmr update /src/style.css
+hmr update /src/components/HeatmapOverlay.tsx
+hmr update /src/style.css
+hmr update /src/components/ExportLegend.tsx
+hmr update /src/style.css
+hmr update /src/style.css
+hmr update /src/style.css
+2:31:10 PM [vite] hmr update /src/components/Toolbar.tsx
+hmr update /src/style.css
+hmr update /src/components/CanvasView.tsx
+hmr update /src/style.css
+hmr update /src/components/Controls.tsx
+hmr update /src/style.css
+hmr update /src/components/PropertyPanel.tsx
+hmr update /src/style.css
+hmr update /src/components/SolverGridOverlay.tsx
+hmr update /src/style.css
+hmr update /src/components/HeatmapOverlay.tsx
+hmr update /src/style.css
+hmr update /src/components/PolygonEditor.tsx
+hmr update /src/style.css
+hmr update /src/components/ExportLegend.tsx
+hmr update /src/style.css
+hmr update /src/style.css
+2:31:18 PM [vite] hmr update /src/components/CanvasView.tsx
+hmr update /src/style.css
+hmr update /src/components/HeatmapOverlay.tsx
+hmr update /src/style.css
+hmr update /src/components/ExportLegend.tsx
+hmr update /src/style.css
+hmr update /src/style.css
+hmr update /src/style.css
+2:31:44 PM [vite] hmr update /src/components/Toolbar.tsx
+hmr update /src/style.css
+2:32:20 PM [vite] hmr update /src/components/PropertyPanel.tsx
+hmr update /src/style.css
+2:33:46 PM [vite] hmr update /src/components/PropertyPanel.tsx
+hmr update /src/style.css
+2:34:23 PM [vite] hmr update /src/components/CanvasView.tsx
+hmr update /src/style.css
+2:34:28 PM [vite] hmr update /src/components/HeatmapOverlay.tsx
+hmr update /src/style.css
+2:34:42 PM [vite] hmr update /src/components/SolverGridOverlay.tsx
+hmr update /src/style.css
+2:35:34 PM [vite] hmr update /src/components/CanvasView.tsx
+hmr update /src/style.css
+2:36:28 PM [vite] hmr update /src/components/Toolbar.tsx
+hmr update /src/style.css
+hmr update /src/components/CanvasView.tsx
+hmr update /src/style.css
+hmr update /src/components/Controls.tsx
+hmr update /src/style.css
+hmr update /src/components/PropertyPanel.tsx
+hmr update /src/style.css
+hmr update /src/components/SolverGridOverlay.tsx
+hmr update /src/style.css
+hmr update /src/components/HeatmapOverlay.tsx
+hmr update /src/style.css
+hmr update /src/components/PolygonEditor.tsx
+hmr update /src/style.css
+hmr update /src/components/ExportLegend.tsx
+hmr update /src/style.css
+hmr update /src/style.css
+2:37:16 PM [vite] hmr update /src/components/CanvasView.tsx
+hmr update /src/style.css
+2:38:23 PM [vite] hmr update /src/components/CanvasView.tsx
+hmr update /src/style.css
+2:38:28 PM [vite] hmr update /src/components/HeatmapOverlay.tsx
+hmr update /src/style.css
+2:38:34 PM [vite] hmr update /src/components/SolverGridOverlay.tsx
+hmr update /src/style.css
+2:38:44 PM [vite] hmr update /src/components/CanvasView.tsx
+hmr update /src/style.css
+2:40:44 PM [vite] hmr update /src/components/CanvasView.tsx
+hmr update /src/style.css
+2:42:35 PM [vite] hmr update /src/components/Toolbar.tsx
+hmr update /src/style.css
+hmr update /src/components/CanvasView.tsx
+hmr update /src/style.css
+hmr update /src/components/Controls.tsx
+hmr update /src/style.css
+hmr update /src/components/PropertyPanel.tsx
+hmr update /src/style.css
+hmr update /src/components/SolverGridOverlay.tsx
+hmr update /src/style.css
+hmr update /src/components/HeatmapOverlay.tsx
+hmr update /src/style.css
+hmr update /src/components/PolygonEditor.tsx
+hmr update /src/style.css
+hmr update /src/components/ExportLegend.tsx
+hmr update /src/style.css
+hmr update /src/style.css
+2:42:44 PM [vite] hmr update /src/components/PropertyPanel.tsx
+hmr update /src/style.css
+2:43:19 PM [vite] hmr update /src/components/CanvasView.tsx
+hmr update /src/style.css
+2:44:20 PM [vite] hmr update /src/components/CanvasView.tsx
+hmr update /src/style.css
+2:44:52 PM [vite] hmr update /src/components/CanvasView.tsx
+hmr update /src/style.css
+2:45:43 PM [vite] hmr update /src/components/Toolbar.tsx
+hmr update /src/style.css
+hmr update /src/components/CanvasView.tsx
+hmr update /src/style.css
+hmr update /src/components/Controls.tsx
+hmr update /src/style.css
+hmr update /src/components/PropertyPanel.tsx
+hmr update /src/style.css
+hmr update /src/components/SolverGridOverlay.tsx
+hmr update /src/style.css
+hmr update /src/components/HeatmapOverlay.tsx
+hmr update /src/style.css
+hmr update /src/components/PolygonEditor.tsx
+hmr update /src/style.css
+hmr update /src/components/ExportLegend.tsx
+hmr update /src/style.css
+hmr update /src/style.css
+2:47:01 PM [vite] hmr update /src/components/CanvasView.tsx
+hmr update /src/style.css
+2:47:21 PM [vite] hmr update /src/components/SolverGridOverlay.tsx
+hmr update /src/style.css
+2:47:41 PM [vite] hmr update /src/components/CanvasView.tsx
+hmr update /src/style.css
+hmr update /src/components/HeatmapOverlay.tsx
+hmr update /src/style.css
+hmr update /src/components/ExportLegend.tsx
+hmr update /src/style.css
+hmr update /src/style.css
+hmr update /src/style.css
+2:47:48 PM [vite] hmr update /src/components/CanvasView.tsx
+hmr update /src/style.css
+hmr update /src/components/HeatmapOverlay.tsx
+hmr update /src/style.css
+hmr update /src/components/ExportLegend.tsx
+hmr update /src/style.css
+hmr update /src/style.css
+hmr update /src/style.css

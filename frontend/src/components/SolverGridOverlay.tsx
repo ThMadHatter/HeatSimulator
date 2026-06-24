@@ -18,13 +18,17 @@ const SolverGridOverlay: React.FC = () => {
     // However, we have heatmapResult.width and height which are nx and ny.
     // The grid should align with the heatmap.
 
-    // The heatmap overlay uses image dimensions.
-    // Let's get them from store to be sure.
-    const imageDimensions = useStore.getState().imageDimensions;
-    if (!imageDimensions) return null;
+    // The grid should align with the heatmap, which is in the master MM space.
+    const { calibrationTop, calibrationBottom, calibration: legacyCal } = useStore.getState();
+    const baseCal = calibrationTop.mmPerPixel ? calibrationTop : (calibrationBottom.mmPerPixel ? calibrationBottom : legacyCal);
 
-    const dxPx = (imageDimensions.width) / nx;
-    const dyPx = (imageDimensions.height) / ny;
+    if (!baseCal.mmPerPixel) return null;
+    const mmToPx = (mm: number) => mm / (baseCal.mmPerPixel as number);
+
+    const widthPx = mmToPx(heatmapResult.widthMm);
+    const heightPx = mmToPx(heatmapResult.heightMm);
+    const dxPx = widthPx / nx;
+    const dyPx = heightPx / ny;
 
     const lines = [];
 
@@ -33,7 +37,7 @@ const SolverGridOverlay: React.FC = () => {
         lines.push(
             <Line
                 key={`v-${i}`}
-                points={[i * dxPx, 0, i * dxPx, imageDimensions.height]}
+                points={[i * dxPx, 0, i * dxPx, heightPx]}
                 stroke="white"
                 strokeWidth={0.5}
                 opacity={0.3}
@@ -47,7 +51,7 @@ const SolverGridOverlay: React.FC = () => {
         lines.push(
             <Line
                 key={`h-${j}`}
-                points={[0, j * dyPx, imageDimensions.width, j * dyPx]}
+                points={[0, j * dyPx, widthPx, j * dyPx]}
                 stroke="white"
                 strokeWidth={0.5}
                 opacity={0.3}

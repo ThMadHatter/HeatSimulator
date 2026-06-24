@@ -42,6 +42,16 @@ const PropertyPanel: React.FC = () => {
   const setGlobalMaxTemperature = useStore(state => state.setGlobalMaxTemperature);
   const manualHeatmapMaxTemperatureC = useStore(state => state.manualHeatmapMaxTemperatureC);
   const setManualHeatmapMaxTemperatureC = useStore(state => state.setManualHeatmapMaxTemperatureC);
+  const heatmapViewMode = useStore(state => state.heatmapViewMode);
+  const setHeatmapViewMode = useStore(state => state.setHeatmapViewMode);
+  const bottomImageOffset = useStore(state => state.bottomImageOffset);
+  const setBottomImageOffset = useStore(state => state.setBottomImageOffset);
+  const bottomImageRotation = useStore(state => state.bottomImageRotation);
+  const setBottomImageRotation = useStore(state => state.setBottomImageRotation);
+  const bottomImageMirrorX = useStore(state => state.bottomImageMirrorX);
+  const setBottomImageMirrorX = useStore(state => state.setBottomImageMirrorX);
+  const bottomImageMirrorY = useStore(state => state.bottomImageMirrorY);
+  const setBottomImageMirrorY = useStore(state => state.setBottomImageMirrorY);
   const heatmapResult = useStore(state => state.heatmapResult);
   const heatmapOpacity = useStore(state => state.heatmapOpacity);
   const setHeatmapOpacity = useStore(state => state.setHeatmapOpacity);
@@ -170,14 +180,27 @@ const PropertyPanel: React.FC = () => {
                 />
             </div>
 
-            <div>
-                <label className="block text-xs font-medium text-gray-700">Max Temp (°C)</label>
-                <input
-                type="number"
-                value={selectedComp.maxTemperature || 125}
-                onChange={(e) => updateComponent(selectedComp.id, { maxTemperature: parseFloat(e.target.value) || 0 })}
-                className="mt-1 block w-full rounded border-gray-300 shadow-sm sm:text-xs p-1 border"
-                />
+            <div className="grid grid-cols-2 gap-2">
+                <div>
+                    <label className="block text-xs font-medium text-gray-700">Max Temp (°C)</label>
+                    <input
+                    type="number"
+                    value={selectedComp.maxTemperature || 125}
+                    onChange={(e) => updateComponent(selectedComp.id, { maxTemperature: parseFloat(e.target.value) || 0 })}
+                    className="mt-1 block w-full rounded border-gray-300 shadow-sm sm:text-xs p-1 border"
+                    />
+                </div>
+                <div>
+                    <label className="block text-xs font-medium text-gray-700">Side</label>
+                    <select
+                        value={selectedComp.side || 'top'}
+                        onChange={(e) => updateComponent(selectedComp.id, { side: e.target.value as 'top' | 'bottom' })}
+                        className="mt-1 block w-full rounded border-gray-300 shadow-sm sm:text-xs p-1 border"
+                    >
+                        <option value="top">Top</option>
+                        <option value="bottom">Bottom</option>
+                    </select>
+                </div>
             </div>
 
 
@@ -239,9 +262,12 @@ const PropertyPanel: React.FC = () => {
                 <div className="space-y-4">
                     {junctionData && (
                         <div className="p-2 bg-blue-50 rounded border border-blue-100 space-y-2">
-                            <h4 className="text-[10px] font-bold text-blue-700 uppercase">Selected: {selectedComp?.name}</h4>
+                            <div className="flex justify-between items-center">
+                                <h4 className="text-[10px] font-bold text-blue-700 uppercase">Selected: {selectedComp?.name}</h4>
+                                <span className="text-[9px] bg-blue-200 text-blue-800 px-1 rounded font-bold uppercase">{selectedComp?.side || 'top'}</span>
+                            </div>
                             <div className="grid grid-cols-2 gap-x-2 gap-y-1 text-xs">
-                                <span className="text-gray-500">Tpcb:</span>
+                                <span className="text-gray-500">Tpcb ({selectedComp?.side || 'top'}):</span>
                                 <span className="text-right font-mono">{junctionData.tPcb.toFixed(1)}°C</span>
 
                                 <span className="text-gray-500">RθPCB:</span>
@@ -284,9 +310,65 @@ const PropertyPanel: React.FC = () => {
             )}
         </Accordion>
 
-        <Accordion title="Heatmap Scale" icon={<Palette size={16} />}>
+        <Accordion title="Heatmap View" icon={<Palette size={16} />} defaultOpen={true}>
             <div className="space-y-3">
-                <div className="flex items-center justify-between">
+                <div>
+                    <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1">View Mode</label>
+                    <div className="grid grid-cols-2 gap-1">
+                        {[
+                            { id: 'top', label: 'Top' },
+                            { id: 'bottom', label: 'Bottom' },
+                            { id: 'max', label: 'Max T/B' },
+                            { id: 'difference', label: 'Delta T' },
+                            { id: 'align', label: 'Alignment' }
+                        ].map(mode => (
+                            <button
+                                key={mode.id}
+                                onClick={() => setHeatmapViewMode(mode.id as any)}
+                                className={`px-2 py-1 text-[10px] font-bold rounded border transition-colors ${
+                                    heatmapViewMode === mode.id
+                                        ? 'bg-blue-600 text-white border-blue-600'
+                                        : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'
+                                }`}
+                            >
+                                {mode.label}
+                            </button>
+                        ))}
+                    </div>
+                </div>
+
+                {heatmapViewMode === 'align' && (
+                    <div className="p-2 bg-orange-50 rounded border border-orange-200">
+                        <div className="text-[10px] font-bold text-orange-700 mb-2 uppercase">Image Alignment (Bottom)</div>
+                        <div className="grid grid-cols-2 gap-2">
+                            <div>
+                                <label className="text-[9px] text-gray-500 block">Offset X (mm)</label>
+                                <input type="number" step="0.1" value={bottomImageOffset.x} onChange={(e) => setBottomImageOffset({...bottomImageOffset, x: parseFloat(e.target.value) || 0})} className="w-full bg-white text-gray-800 text-[10px] px-2 py-1 rounded border border-gray-300" />
+                            </div>
+                            <div>
+                                <label className="text-[9px] text-gray-500 block">Offset Y (mm)</label>
+                                <input type="number" step="0.1" value={bottomImageOffset.y} onChange={(e) => setBottomImageOffset({...bottomImageOffset, y: parseFloat(e.target.value) || 0})} className="w-full bg-white text-gray-800 text-[10px] px-2 py-1 rounded border border-gray-300" />
+                            </div>
+                            <div className="col-span-2">
+                                <label className="text-[9px] text-gray-500 block">Rotation (deg)</label>
+                                <input type="number" step="0.5" value={bottomImageRotation} onChange={(e) => setBottomImageRotation(parseFloat(e.target.value) || 0)} className="w-full bg-white text-gray-800 text-[10px] px-2 py-1 rounded border border-gray-300" />
+                            </div>
+                            <div className="flex items-center gap-4 col-span-2 mt-1">
+                                <label className="flex items-center gap-1 cursor-pointer">
+                                    <input type="checkbox" checked={bottomImageMirrorX} onChange={(e) => setBottomImageMirrorX(e.target.checked)} className="rounded text-blue-600" />
+                                    <span className="text-[9px] text-gray-600 font-bold uppercase">Mirror X</span>
+                                </label>
+                                <label className="flex items-center gap-1 cursor-pointer">
+                                    <input type="checkbox" checked={bottomImageMirrorY} onChange={(e) => setBottomImageMirrorY(e.target.checked)} className="rounded text-blue-600" />
+                                    <span className="text-[9px] text-gray-600 font-bold uppercase">Mirror Y</span>
+                                </label>
+                            </div>
+                        </div>
+                        <div className="text-[8px] text-gray-500 mt-2 italic text-center">Hint: Drag bottom image in canvas to align</div>
+                    </div>
+                )}
+
+                <div className="flex items-center justify-between pt-2 border-t border-gray-100">
                     <label className="text-xs font-medium text-gray-700">Auto Scale</label>
                     <input
                         type="checkbox"
@@ -507,7 +589,7 @@ const PropertyPanel: React.FC = () => {
                     const dataURL = stageRef.toDataURL({ pixelRatio: 2 });
                     const link = document.createElement('a');
                     const date = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 16);
-                    link.download = `pcb-thermal-heatmap-${date}.png`;
+                    link.download = `pcb-thermal-${heatmapViewMode}-${date}.png`;
                     link.href = dataURL;
                     link.click();
                 } else {

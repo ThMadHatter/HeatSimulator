@@ -5,15 +5,15 @@ import { SelectImage, LoadImage } from '../../wailsjs/go/main/App';
 import { detectPCBOutline, isOpenCVReady } from '../thermal/edgeDetection';
 
 const Toolbar: React.FC = () => {
-  const { mode, setMode, selection, setImage, image, calibration, addZone, removeZone, zones, clearSelection } = useStore();
+  const { mode, setMode, selection, setImageSide, image, calibration, calibrationTop, calibrationBottom, heatmapViewMode, addZone, removeZone, zones, clearSelection } = useStore();
 
-  const handleLoadImage = async () => {
+  const handleLoadImage = async (side: 'top' | 'bottom') => {
     try {
       const path = await SelectImage();
       if (path) {
         const base64 = await LoadImage(path);
         const img = new Image();
-        img.onload = () => setImage(base64, img.width, img.height);
+        img.onload = () => setImageSide(side, base64, img.width, img.height);
         img.src = base64;
       }
     } catch (err) {
@@ -72,7 +72,16 @@ const Toolbar: React.FC = () => {
 
   return (
     <div className="flex-none flex flex-col gap-4 p-4 bg-gray-800 text-white w-16 items-center shadow-lg h-full z-20 overflow-y-auto">
-      <button onClick={handleLoadImage} className="p-2 rounded hover:bg-gray-700 transition-colors" title="Load Image"><Upload size={24} /></button>
+      <div className="flex flex-col gap-2">
+          <button onClick={() => handleLoadImage('top')} className="p-2 rounded hover:bg-gray-700 transition-colors relative group" title="Load Top Image">
+              <Upload size={24} />
+              <span className="absolute -bottom-1 -right-1 bg-blue-600 text-[8px] font-bold px-1 rounded">T</span>
+          </button>
+          <button onClick={() => handleLoadImage('bottom')} className="p-2 rounded hover:bg-gray-700 transition-colors relative group" title="Load Bottom Image">
+              <Upload size={24} />
+              <span className="absolute -bottom-1 -right-1 bg-green-600 text-[8px] font-bold px-1 rounded">B</span>
+          </button>
+      </div>
       <div className="w-full h-px bg-gray-700 my-1" />
       <button onClick={() => changeMode('select')} className={`p-2 rounded transition-colors ${mode === 'select' ? 'bg-blue-600' : 'hover:bg-gray-700'}`} title="Select (V)"><MousePointer2 size={24} /></button>
       <button onClick={() => changeMode('pan')} className={`p-2 rounded transition-colors ${mode === 'pan' ? 'bg-blue-600' : 'hover:bg-gray-700'}`} title="Pan (H)"><Hand size={24} /></button>
@@ -82,7 +91,14 @@ const Toolbar: React.FC = () => {
       <button onClick={() => changeMode('drawBoundary')} className={`p-2 rounded transition-colors ${mode === 'drawBoundary' ? 'bg-blue-600' : 'hover:bg-gray-700'}`} title="Draw PCB Boundary (B)"><Square size={24} /></button>
       <button onClick={handleAutoDetect} className="p-2 rounded hover:bg-gray-700 transition-colors" title="Auto-detect PCB Boundary"><Scan size={24} /></button>
       <button onClick={() => changeMode('addComponent')} className={`p-2 rounded transition-colors ${mode === 'addComponent' ? 'bg-blue-600' : 'hover:bg-gray-700'}`} title="Add Component (A)"><Plus size={24} /></button>
-      <button onClick={() => changeMode('calibrate')} className={`p-2 rounded transition-colors ${mode === 'calibrate' ? 'bg-blue-600' : 'hover:bg-gray-700'}`} title="Calibrate Scale (C)"><Ruler size={24} /></button>
+      <div className="flex flex-col gap-1 items-center">
+          <button onClick={() => changeMode('calibrate')} className={`p-2 rounded transition-colors ${mode === 'calibrate' ? 'bg-blue-600' : 'hover:bg-gray-700'} relative`} title="Calibrate Scale (C)">
+              <Ruler size={24} />
+              {calibrationTop.mmPerPixel && <span className="absolute top-0 right-0 w-2 h-2 bg-blue-500 rounded-full border border-gray-800" title="Top Calibrated"></span>}
+              {calibrationBottom.mmPerPixel && <span className="absolute bottom-0 right-0 w-2 h-2 bg-green-500 rounded-full border border-gray-800" title="Bottom Calibrated"></span>}
+          </button>
+          <span className="text-[8px] font-bold text-gray-400 uppercase">{heatmapViewMode === 'bottom' ? 'Bot' : 'Top'}</span>
+      </div>
     </div>
   );
 };
